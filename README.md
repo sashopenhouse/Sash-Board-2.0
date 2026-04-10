@@ -21,7 +21,7 @@ Three files. ~30 minutes to deploy.
 3. Grab your keys from **Settings → API**:
    - **Project URL** (e.g. `https://abcxyz.supabase.co`)
    - **anon public** key → goes in `nys-track.js`
-   - **service_role secret** key → goes in `dashboard.html` (keep private, never in tracking snippet)
+  - **service_role secret** key → store in Vercel env vars (keep private, never in client code)
 
 ---
 
@@ -77,17 +77,19 @@ Open `index.html` and update the CONFIG block near the bottom:
 
 ```js
 const CONFIG = {
-  SUPABASE_URL:         'https://YOUR_PROJECT.supabase.co',
-  SUPABASE_SERVICE_KEY: 'YOUR_SERVICE_ROLE_KEY',  // ← service key, not anon
-  DASHBOARD_PASSWORD:   'change-this-password',
+  API_BASE: '/api/query',
+  DASHBOARD_PASSWORD: 'change-this-password',
 };
 ```
 
 **Deploy to Vercel:**
-1. Deploy `index.html` to Vercel (static site)
-2. Your dashboard URL is: `https://sash-board-2-0.vercel.app/`
+1. Deploy the repo to Vercel
+2. Add env vars in Vercel Project Settings → Environment Variables:
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_KEY`
+3. Your dashboard URL is: `https://sash-board-2-0.vercel.app/`
 
-> ⚠️ The service role key bypasses Row Level Security. Never put it in your tracking snippet or any public-facing code — only in the dashboard HTML, which is password-protected.
+> ⚠️ The service role key bypasses Row Level Security. Never put it in client code. Keep it in Vercel env vars only.
 
 ---
 
@@ -109,7 +111,7 @@ You should see your page_view event appear within a few seconds.
 ## Adding more campaigns in future
 
 1. Add the `<script>` tag to the new site — auto-detection handles the rest
-2. Add a new `<option>` to the site filter dropdown in `dashboard.html`
+2. Add a new `<option>` to the site filter dropdown in `index.html`
 
 ---
 
