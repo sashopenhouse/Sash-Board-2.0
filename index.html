@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NYS Analytics</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Montserrat:wght@600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
 /* ── Reset & Variables ───────────────────────────────────────────────────── */
@@ -23,9 +23,9 @@
   --white:     #f0eee8;
   --muted:     rgba(240,238,232,0.45);
   --faint:     rgba(240,238,232,0.18);
-  --mono:      'DM Mono', monospace;
-  --sans:      'DM Sans', sans-serif;
-  --display:   'Syne', sans-serif;
+  --mono:      'Roboto Mono', monospace;
+  --sans:      'Lato', sans-serif;
+  --display:   'Montserrat', sans-serif;
   --radius:    6px;
   --radius-lg: 12px;
 }
@@ -68,7 +68,9 @@ header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px; height: 52px;
 }
-.logo { font-family: var(--display); font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+.logo { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 15px; font-weight: 800; letter-spacing: -0.2px; }
+.logo img { height: 22px; width: auto; display: block; }
+.logo-mark { filter: brightness(0) invert(1); }
 .logo span { color: var(--red); }
 .header-right { display: flex; align-items: center; gap: 16px; }
 .live-dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
@@ -234,6 +236,7 @@ select.site-filter:focus { border-color: var(--border-hi); }
 
 <!-- ── Login Gate ──────────────────────────────────────────────────────────── -->
 <div id="login-gate">
+  <img src="ny-sash-logo.png" alt="New York Sash" class="logo-mark" style="height:44px;width:auto;">
   <h1>NYS <span class="word">Analytics</span></h1>
   <div class="login-box">
     <input type="password" id="pw-input" placeholder="Enter dashboard password" autocomplete="current-password">
@@ -248,7 +251,10 @@ select.site-filter:focus { border-color: var(--border-hi); }
 <!-- ── App ─────────────────────────────────────────────────────────────────── -->
 <div id="app">
   <header>
-    <div class="logo">NEW YORK <span>SASH</span> Analytics</div>
+    <div class="logo">
+      <img src="ny-sash-logo.png" alt="New York Sash" class="logo-mark">
+      <div>Analytics</div>
+    </div>
     <div class="header-right">
       <div class="live-dot" title="Live data"></div>
       <span class="last-updated" id="last-updated">—</span>
@@ -431,6 +437,22 @@ function safeFileName(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function loadLogoDataUrl() {
+  const res = await fetch('ny-sash-logo.png', { cache: 'no-cache' });
+  if (!res.ok) throw new Error('Logo fetch failed');
+  const blob = await res.blob();
+  return blobToDataUrl(blob);
+}
+
 async function generateReportPdf() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     alert('PDF library not loaded. Please refresh and try again.');
@@ -462,9 +484,14 @@ async function generateReportPdf() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+
+  try {
+    const logoData = await loadLogoDataUrl();
+    doc.addImage(logoData, 'PNG', 14, 12, 32, 12);
+  } catch {}
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text('NYS Analytics Report', 14, 20);
+  doc.text('NYS Analytics Report', 52, 20);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
   doc.text(`Site: ${siteLabel}`, 14, 30);
