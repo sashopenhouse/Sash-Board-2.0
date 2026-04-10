@@ -214,6 +214,18 @@ select.site-filter:focus { border-color: var(--border-hi); }
 .j-page { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .j-count { font-family: var(--mono); font-size: 10px; color: var(--faint); }
 
+/* ── Sources ────────────────────────────────────────────────────────────── */
+.source-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .source-grid { grid-template-columns: 1fr; } }
+.source-list { display: flex; flex-direction: column; gap: 6px; }
+.source-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; background: var(--surface2); border-radius: var(--radius);
+  font-size: 12px;
+}
+.source-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-count { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+
 /* ── Loading state ───────────────────────────────────────────────────────── */
 .loading { color: var(--faint); font-family: var(--mono); font-size: 12px; text-align: center; padding: 32px; }
 .skeleton {
@@ -342,6 +354,28 @@ select.site-filter:focus { border-color: var(--border-hi); }
       </div>
     </div>
 
+    <!-- Traffic sources -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Top traffic sources</span>
+        <span class="panel-sub">Referrers and UTM campaigns</span>
+      </div>
+      <div class="source-grid">
+        <div>
+          <div class="panel-sub" style="margin-bottom:8px;">Top referrers</div>
+          <div class="source-list" id="referrer-list">
+            <div class="loading">Loading...</div>
+          </div>
+        </div>
+        <div>
+          <div class="panel-sub" style="margin-bottom:8px;">Top UTM campaigns</div>
+          <div class="source-list" id="utm-list">
+            <div class="loading">Loading...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Geo map -->
     <div class="panel">
       <div class="panel-header">
@@ -379,6 +413,14 @@ const CONFIG = {
 let activeDays = 7;
 let activeSite = '';
 let trafficChart = null;
+const OWNED_HOSTS = [
+  'newyorksash.com',
+  'newyorksashoffers.com',
+  'upstatetoughny.com',
+  'newyorksash-adirondacks.com',
+  'newyorksash-cooperstown.com',
+  'energy-efficient-cny.com'
+];
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function checkLogin() {
@@ -415,6 +457,27 @@ function dateFrom(days) {
 
 function siteFilter() {
   return activeSite ? `&site_id=eq.${encodeURIComponent(activeSite)}` : '';
+}
+
+function normalizeReferrer(ref) {
+  if (!ref) return null;
+  try {
+    const host = new URL(ref).hostname.replace(/^www\./, '');
+    if (!host) return null;
+    if (OWNED_HOSTS.some(h => host === h)) return null;
+    return host;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeUtm(row) {
+  const source = row.utm_source || '';
+  const medium = row.utm_medium || '';
+  const campaign = row.utm_campaign || '';
+  if (!source && !medium && !campaign) return null;
+  const parts = [source, medium, campaign].filter(Boolean);
+  return parts.join(' / ');
 }
 
 function selectedSiteLabel() {
@@ -466,7 +529,7 @@ async function generateReportPdf() {
 
   const since = dateFrom(activeDays);
   const sf = siteFilter();
-  const rows = await query('events', `ts=gte.${since}${sf}&select=event_type,visitor_id,site_id`);
+  const rows = await query('events', `ts=gte.${since}${sf}&select=event_type,visitor_id,site_id,referrer,utm_source,utm_medium,utm_campaign`);
 
   if (!rows.length) {
     alert('No data for the selected range/site.');
@@ -511,6 +574,25 @@ async function generateReportPdf() {
     ? 'Top campaigns by quote actions: ' + topSites.map(s => `${siteLabelFromId(s.siteId)} (${s.quotes} quotes, ${s.cvr}% CVR)`).join('; ') + '.'
     : 'Top campaigns by quote actions: No campaign breakdown available.';
 
+  const refCounts = {};
+  const utmCounts = {};
+  rows.forEach(r => {
+    const ref = normalizeReferrer(r.referrer);
+    if (ref) refCounts[ref] = (refCounts[ref] || 0) + 1;
+    const utm = normalizeUtm(r);
+    if (utm) utmCounts[utm] = (utmCounts[utm] || 0) + 1;
+  });
+
+  const topRefs = Object.entries(refCounts).sort((a,b) => b[1]-a[1]).slice(0, 3);
+  const topUtms = Object.entries(utmCounts).sort((a,b) => b[1]-a[1]).slice(0, 3);
+
+  const refLine = topRefs.length
+    ? 'Top referrers: ' + topRefs.map(([k,v]) => `${k} (${v})`).join('; ') + '.'
+    : 'Top referrers: none detected.';
+  const utmLine = topUtms.length
+    ? 'Top UTM campaigns: ' + topUtms.map(([k,v]) => `${k} (${v})`).join('; ') + '.'
+    : 'Top UTM campaigns: none detected.';
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -541,6 +623,14 @@ async function generateReportPdf() {
   const topY = 64 + (lines.length * 6) + 6;
   doc.text(topLines, 14, topY);
 
+  const refLines = doc.splitTextToSize(refLine, 180);
+  const refY = topY + (topLines.length * 6) + 4;
+  doc.text(refLines, 14, refY);
+
+  const utmLines = doc.splitTextToSize(utmLine, 180);
+  const utmY = refY + (refLines.length * 6) + 4;
+  doc.text(utmLines, 14, utmY);
+
   const fileBase = `nys-report-${safeFileName(siteLabel)}-${activeDays}d`;
   doc.save(`${fileBase}.pdf`);
 }
@@ -549,11 +639,50 @@ async function generateReportPdf() {
 async function loadAll() {
   document.getElementById('last-updated').textContent = 'Refreshing…';
   try {
-    await Promise.all([loadKPIs(), loadTrafficChart(), loadFunnel(), loadEventFeed(), loadJourneys(), loadGeo()]);
+    await Promise.all([loadKPIs(), loadTrafficChart(), loadFunnel(), loadEventFeed(), loadJourneys(), loadSources(), loadGeo()]);
     document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
   } catch(e) {
     document.getElementById('last-updated').textContent = 'Error — check config';
     console.error(e);
+  }
+}
+
+// ── Traffic sources ─────────────────────────────────────────────────────────
+async function loadSources() {
+  const since = dateFrom(activeDays);
+  const sf = siteFilter();
+  const rows = await query('events', `ts=gte.${since}${sf}&select=referrer,utm_source,utm_medium,utm_campaign&limit=50000`);
+
+  const refCounts = {};
+  const utmCounts = {};
+
+  rows.forEach(r => {
+    const ref = normalizeReferrer(r.referrer);
+    if (ref) refCounts[ref] = (refCounts[ref] || 0) + 1;
+    const utm = normalizeUtm(r);
+    if (utm) utmCounts[utm] = (utmCounts[utm] || 0) + 1;
+  });
+
+  const refList = Object.entries(refCounts).sort((a,b) => b[1]-a[1]).slice(0, 8);
+  const utmList = Object.entries(utmCounts).sort((a,b) => b[1]-a[1]).slice(0, 8);
+
+  const refEl = document.getElementById('referrer-list');
+  const utmEl = document.getElementById('utm-list');
+
+  if (!refList.length) {
+    refEl.innerHTML = '<div class="loading">No referrers yet</div>';
+  } else {
+    refEl.innerHTML = refList.map(([name, count]) => (
+      `<div class="source-item"><span class="source-name">${name}</span><span class="source-count">${count}</span></div>`
+    )).join('');
+  }
+
+  if (!utmList.length) {
+    utmEl.innerHTML = '<div class="loading">No UTM campaigns yet</div>';
+  } else {
+    utmEl.innerHTML = utmList.map(([name, count]) => (
+      `<div class="source-item"><span class="source-name">${name}</span><span class="source-count">${count}</span></div>`
+    )).join('');
   }
 }
 
