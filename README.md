@@ -10,7 +10,7 @@ Three files. ~30 minutes to deploy.
 |---|---|
 | `nys-track.js` | Tracking snippet — goes on every site |
 | `supabase-schema.sql` | Run once in Supabase to create your tables |
-| `dashboard.html` | Your analytics dashboard — deploy to Netlify |
+| `dashboard.html` | Your analytics dashboard — deploy to Vercel |
 
 ---
 
@@ -83,11 +83,9 @@ const CONFIG = {
 };
 ```
 
-**Deploy to Netlify:**
-1. Go to netlify.com → **Add new site → Deploy manually**
-2. Drag the `dashboard.html` file into the drop zone
-3. Netlify gives you a URL like `https://random-name.netlify.app`
-4. Optionally rename it to something like `nys-analytics.netlify.app`
+**Deploy to Vercel:**
+1. Deploy `dashboard.html` to Vercel (static site)
+2. Your dashboard URL is: `https://sash-board-2-0.vercel.app/`
 
 > ⚠️ The service role key bypasses Row Level Security. Never put it in your tracking snippet or any public-facing code — only in the dashboard HTML, which is password-protected.
 
