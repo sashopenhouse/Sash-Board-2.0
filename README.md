@@ -10,7 +10,7 @@ Three files. ~30 minutes to deploy.
 |---|---|
 | `nys-track.js` | Tracking snippet — goes on every site |
 | `supabase-schema.sql` | Run once in Supabase to create your tables |
-| `dashboard.html` | Your analytics dashboard — deploy to Vercel |
+| `index.html` | Your analytics dashboard — deploy to Vercel |
 
 ---
 
@@ -73,7 +73,7 @@ Add `data-nys-action="spin"` and `data-nys-action="claim"` to your spin and clai
 
 ## Step 4 — Configure and deploy the dashboard
 
-Open `dashboard.html` and update the CONFIG block near the bottom:
+Open `index.html` and update the CONFIG block near the bottom:
 
 ```js
 const CONFIG = {
@@ -84,7 +84,7 @@ const CONFIG = {
 ```
 
 **Deploy to Vercel:**
-1. Deploy `dashboard.html` to Vercel (static site)
+1. Deploy `index.html` to Vercel (static site)
 2. Your dashboard URL is: `https://sash-board-2-0.vercel.app/`
 
 > ⚠️ The service role key bypasses Row Level Security. Never put it in your tracking snippet or any public-facing code — only in the dashboard HTML, which is password-protected.
