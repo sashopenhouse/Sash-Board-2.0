@@ -244,7 +244,7 @@ select.site-filter:focus { border-color: var(--border-hi); }
     <div class="login-error" id="login-error"></div>
   </div>
   <div style="font-family:var(--mono);font-size:10px;color:var(--faint);text-align:center;max-width:240px;">
-    Set your password and Supabase keys in the CONFIG section at the top of this file
+    Set the dashboard password in CONFIG and store Supabase keys in Vercel env vars
   </div>
 </div>
 
@@ -261,9 +261,9 @@ select.site-filter:focus { border-color: var(--border-hi); }
   <main>
     <!-- Config notice (shown until keys are set) -->
     <div class="config-notice" id="config-notice" style="display:none">
-      <strong>Setup required:</strong> Open this file and replace <code>YOUR_SUPABASE_URL</code>,
-      <code>YOUR_SUPABASE_SERVICE_KEY</code>, and <code>DASHBOARD_PASSWORD</code> at the top of
-      the &lt;script&gt; section. Then add <code>nys-track.js</code> to each site.
+      <strong>Setup required:</strong> Set <code>DASHBOARD_PASSWORD</code> in this file. In Vercel,
+      add <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_KEY</code> as env vars. Then add
+      <code>nys-track.js</code> to each site.
     </div>
 
     <!-- Controls -->
@@ -371,9 +371,8 @@ select.site-filter:focus { border-color: var(--border-hi); }
 // CONFIG — replace these values before deploying
 // ═══════════════════════════════════════════════════════════════
 const CONFIG = {
-  SUPABASE_URL:        'https://iyywdyrspsiqhdnxsbzc.supabase.co',
-  SUPABASE_SERVICE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eXdkeXJzcHNpcWhkbnhzYnpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTgyNDY4NSwiZXhwIjoyMDkxNDAwNjg1fQ.TSrtxbD48aOg1ODZT3hiEWtjNW_DcOvSFeuBAE8hWGI',   // service key (NOT anon) — keep private
-  DASHBOARD_PASSWORD:  'Password123!!',                  // change this!
+  API_BASE: '/api/query',
+  DASHBOARD_PASSWORD:  'Password123!!',
 };
 // ═══════════════════════════════════════════════════════════════
 
@@ -387,7 +386,7 @@ function checkLogin() {
   if (val === CONFIG.DASHBOARD_PASSWORD) {
     document.getElementById('login-gate').style.display = 'none';
     document.getElementById('app').classList.add('visible');
-    if (CONFIG.SUPABASE_URL.includes('YOUR_PROJECT')) {
+    if (!CONFIG.API_BASE) {
       document.getElementById('config-notice').style.display = 'block';
     }
     loadAll();
@@ -401,15 +400,10 @@ document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key
 
 // ── Supabase query helper ─────────────────────────────────────────────────────
 async function query(table, params = '') {
-  const url = `${CONFIG.SUPABASE_URL}/rest/v1/${table}?${params}`;
-  const r = await fetch(url, {
-    headers: {
-      'apikey': CONFIG.SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${CONFIG.SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-    }
-  });
-  if (!r.ok) throw new Error(`Supabase error: ${r.status}`);
+  const base = CONFIG.API_BASE || '/api/query';
+  const url = `${base}?table=${encodeURIComponent(table)}&params=${encodeURIComponent(params)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`API error: ${r.status}`);
   return r.json();
 }
 
