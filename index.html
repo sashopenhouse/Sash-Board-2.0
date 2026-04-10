@@ -460,6 +460,13 @@ async function loadLogoDataUrl() {
   return blobToDataUrl(blob);
 }
 
+async function loadPdfLogoDataUrl() {
+  const res = await fetch('ny-sash-logo.png', { cache: 'no-cache' });
+  if (!res.ok) throw new Error('Logo fetch failed');
+  const blob = await res.blob();
+  return blobToDataUrl(blob);
+}
+
 async function generateReportPdf() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     alert('PDF library not loaded. Please refresh and try again.');
@@ -515,27 +522,32 @@ async function generateReportPdf() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const titleText = 'NYS Analytics Report';
 
   try {
-    const logoData = await loadLogoDataUrl();
-    doc.addImage(logoData, 'PNG', 14, 12, 32, 12);
+    const logoData = await loadPdfLogoDataUrl();
+    const logoW = 40;
+    const logoH = 14;
+    const logoX = (pageWidth - logoW) / 2;
+    doc.addImage(logoData, 'PNG', logoX, 10, logoW, logoH);
   } catch {}
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text('NYS Analytics Report', 52, 20);
+  doc.text(titleText, pageWidth / 2, 30, { align: 'center' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text(`Site: ${siteLabel}`, 14, 30);
-  doc.text(`Range: ${rangeLabel}`, 14, 36);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 42);
+  doc.text(`Site: ${siteLabel}`, 14, 40);
+  doc.text(`Range: ${rangeLabel}`, 14, 46);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 52);
 
   doc.setFontSize(12);
   const lines = doc.splitTextToSize(paragraph, 180);
-  doc.text(lines, 14, 58);
+  doc.text(lines, 14, 64);
 
   doc.setFontSize(11);
   const topLines = doc.splitTextToSize(topLine, 180);
-  const topY = 58 + (lines.length * 6) + 6;
+  const topY = 64 + (lines.length * 6) + 6;
   doc.text(topLines, 14, topY);
 
   const fileBase = `nys-report-${safeFileName(siteLabel)}-${activeDays}d`;
