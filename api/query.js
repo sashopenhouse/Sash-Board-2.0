@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   }
 
   const table = Array.isArray(req.query.table) ? req.query.table[0] : req.query.table;
-  const params = Array.isArray(req.query.params) ? req.query.params[0] : req.query.params;
+  const rawParams = Array.isArray(req.query.params) ? req.query.params[0] : req.query.params;
 
   const allowedTables = new Set([
     'events',
@@ -27,7 +27,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  const url = `${supabaseUrl}/rest/v1/${table}?${params || ''}`;
+  const baseUrl = supabaseUrl.replace(/\/rest\/v1\/?$/i, '');
+  const params = (rawParams || '').replace(/^\?/, '').replace(/^&/, '');
+  const url = `${baseUrl}/rest/v1/${table}${params ? `?${params}` : ''}`;
 
   try {
     const upstream = await fetch(url, {
