@@ -106,6 +106,12 @@ select.site-filter:focus { border-color: var(--border-hi); }
   transition: all 0.15s; margin-left: auto;
 }
 .refresh-btn:hover { color: var(--white); border-color: var(--border-hi); }
+.report-btn {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--muted); cursor: pointer; font-size: 13px; padding: 5px 10px;
+  transition: all 0.15s;
+}
+.report-btn:hover { color: var(--white); border-color: var(--border-hi); }
 
 /* ── KPI cards ───────────────────────────────────────────────────────────── */
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
@@ -274,6 +280,7 @@ select.site-filter:focus { border-color: var(--border-hi); }
         <option value="newyorksash-cooperstown">newyorksash-cooperstown.com</option>
         <option value="energy-efficient-cny">energy-efficient-cny.com</option>
       </select>
+      <button class="report-btn" onclick="generateReportPdf()" title="Download PDF report">Report PDF</button>
       <button class="refresh-btn" onclick="loadAll()" title="Refresh data">↻ Refresh</button>
     </div>
 
@@ -354,6 +361,7 @@ select.site-filter:focus { border-color: var(--border-hi); }
 <!-- Leaflet (optional — map will show placeholder if not needed) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -410,6 +418,65 @@ function dateFrom(days) {
 
 function siteFilter() {
   return activeSite ? `&site_id=eq.${encodeURIComponent(activeSite)}` : '';
+}
+
+function selectedSiteLabel() {
+  const select = document.getElementById('site-filter');
+  return select && select.selectedIndex >= 0
+    ? select.options[select.selectedIndex].text
+    : 'All sites';
+}
+
+function safeFileName(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+async function generateReportPdf() {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('PDF library not loaded. Please refresh and try again.');
+    return;
+  }
+
+  const since = dateFrom(activeDays);
+  const sf = siteFilter();
+  const rows = await query('events', `ts=gte.${since}${sf}&select=event_type,visitor_id`);
+
+  if (!rows.length) {
+    alert('No data for the selected range/site.');
+    return;
+  }
+
+  const visitors = new Set(rows.map(r => r.visitor_id)).size;
+  const pageviews = rows.filter(r => r.event_type === 'page_view').length;
+  const phone = rows.filter(r => r.event_type === 'phone_click').length;
+  const quotes = rows.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit').length;
+  const outbound = rows.filter(r => r.event_type === 'outbound_to_main').length;
+  const cvr = visitors > 0 ? ((quotes / visitors) * 100).toFixed(1) : '0.0';
+
+  const startDate = new Date(since).toLocaleDateString();
+  const endDate = new Date().toLocaleDateString();
+  const siteLabel = selectedSiteLabel();
+  const rangeLabel = `Last ${activeDays} days (${startDate} - ${endDate})`;
+
+  const paragraph = `For ${rangeLabel}, ${siteLabel} recorded ${visitors.toLocaleString()} unique visitors and ${pageviews.toLocaleString()} page views. We saw ${phone.toLocaleString()} phone clicks and ${quotes.toLocaleString()} quote actions, resulting in a conversion rate of ${cvr}%. There were ${outbound.toLocaleString()} clicks back to the main site.`;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('NYS Analytics Report', 14, 20);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.text(`Site: ${siteLabel}`, 14, 30);
+  doc.text(`Range: ${rangeLabel}`, 14, 36);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 42);
+
+  doc.setFontSize(12);
+  const lines = doc.splitTextToSize(paragraph, 180);
+  doc.text(lines, 14, 58);
+
+  const fileBase = `nys-report-${safeFileName(siteLabel)}-${activeDays}d`;
+  doc.save(`${fileBase}.pdf`);
 }
 
 // ── Load all panels ───────────────────────────────────────────────────────────
