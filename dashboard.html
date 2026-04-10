@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NYS Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & Variables ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0a0a0b;
+  --surface:   #111114;
+  --surface2:  #18181c;
+  --border:    rgba(255,255,255,0.07);
+  --border-hi: rgba(255,255,255,0.14);
+  --red:       #e8392a;
+  --red-lo:    rgba(232,57,42,0.12);
+  --red-mid:   rgba(232,57,42,0.25);
+  --white:     #f0eee8;
+  --muted:     rgba(240,238,232,0.45);
+  --faint:     rgba(240,238,232,0.18);
+  --mono:      'DM Mono', monospace;
+  --sans:      'DM Sans', sans-serif;
+  --display:   'Syne', sans-serif;
+  --radius:    6px;
+  --radius-lg: 12px;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--white); font-family: var(--sans); font-size: 14px; }
+
+/* ── Login Gate ──────────────────────────────────────────────────────────── */
+#login-gate {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center; z-index: 999;
+  flex-direction: column; gap: 24px;
+}
+#login-gate h1 { font-family: var(--display); font-size: 22px; letter-spacing: -0.5px; }
+#login-gate .word { color: var(--red); }
+.login-box { display: flex; flex-direction: column; gap: 10px; width: 280px; }
+.login-box input {
+  background: var(--surface2); border: 1px solid var(--border-hi);
+  border-radius: var(--radius); color: var(--white); font-family: var(--mono);
+  font-size: 13px; padding: 10px 14px; outline: none; letter-spacing: 1px;
+  transition: border-color 0.2s;
+}
+.login-box input:focus { border-color: var(--red); }
+.login-box button {
+  background: var(--red); border: none; border-radius: var(--radius);
+  color: #fff; cursor: pointer; font-family: var(--display); font-size: 13px;
+  font-weight: 700; padding: 10px; letter-spacing: 0.5px;
+  transition: opacity 0.15s;
+}
+.login-box button:hover { opacity: 0.85; }
+.login-error { color: var(--red); font-size: 12px; text-align: center; min-height: 16px; }
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+#app { display: none; min-height: 100vh; flex-direction: column; }
+#app.visible { display: flex; }
+
+header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,10,11,0.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: 52px;
+}
+.logo { font-family: var(--display); font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+.logo span { color: var(--red); }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.live-dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+.last-updated { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+main { flex: 1; padding: 24px; max-width: 1400px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+/* ── Controls bar ────────────────────────────────────────────────────────── */
+.controls {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.range-pills { display: flex; gap: 4px; }
+.pill {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; color: var(--muted); cursor: pointer;
+  font-family: var(--mono); font-size: 11px; padding: 5px 12px;
+  transition: all 0.15s; white-space: nowrap;
+}
+.pill:hover { border-color: var(--border-hi); color: var(--white); }
+.pill.active { background: var(--red-lo); border-color: var(--red); color: var(--white); }
+
+select.site-filter {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--white); font-family: var(--mono); font-size: 11px; padding: 5px 10px;
+  outline: none; cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center; padding-right: 24px;
+}
+select.site-filter:focus { border-color: var(--border-hi); }
+
+.refresh-btn {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--muted); cursor: pointer; font-size: 13px; padding: 5px 10px;
+  transition: all 0.15s; margin-left: auto;
+}
+.refresh-btn:hover { color: var(--white); border-color: var(--border-hi); }
+
+/* ── KPI cards ───────────────────────────────────────────────────────────── */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 16px 18px; position: relative; overflow: hidden;
+  transition: border-color 0.2s;
+}
+.kpi-card:hover { border-color: var(--border-hi); }
+.kpi-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--red), transparent); opacity: 0.4;
+}
+.kpi-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.kpi-value { font-family: var(--display); font-size: 32px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+.kpi-delta { font-family: var(--mono); font-size: 11px; margin-top: 6px; }
+.kpi-delta.up { color: #22c55e; }
+.kpi-delta.down { color: var(--red); }
+.kpi-delta.neutral { color: var(--muted); }
+
+/* ── Two-column section ──────────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+/* ── Panel ───────────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px;
+}
+.panel-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+.panel-title { font-family: var(--display); font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
+.panel-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+/* ── Campaign funnel table ───────────────────────────────────────────────── */
+.funnel-table { width: 100%; border-collapse: collapse; }
+.funnel-table th {
+  font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.8px; text-align: left; padding: 4px 8px 10px; border-bottom: 1px solid var(--border);
+}
+.funnel-table td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.funnel-table tr:last-child td { border-bottom: none; }
+.funnel-table tr:hover td { background: var(--surface2); }
+.site-tag {
+  display: inline-block; font-family: var(--mono); font-size: 10px; padding: 2px 7px;
+  border-radius: 3px; background: var(--red-lo); color: var(--red); border: 1px solid var(--red-mid);
+}
+.bar-cell { min-width: 80px; }
+.bar-wrap { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--red); border-radius: 2px; transition: width 0.6s ease; }
+.conv-pct { font-family: var(--mono); font-size: 12px; color: var(--red); font-weight: 500; }
+
+/* ── Event feed ──────────────────────────────────────────────────────────── */
+.event-feed { max-height: 340px; overflow-y: auto; }
+.event-feed::-webkit-scrollbar { width: 4px; }
+.event-feed::-webkit-scrollbar-track { background: transparent; }
+.event-feed::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+.event-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.event-row:last-child { border-bottom: none; }
+.event-type-badge {
+  font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 3px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.ev-page_view       { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
+.ev-phone_click     { background: rgba(34,197,94,0.15);  color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+.ev-form_submit     { background: rgba(232,57,42,0.15);  color: #fca5a5; border: 1px solid rgba(232,57,42,0.25); }
+.ev-quote_confirmed { background: rgba(232,57,42,0.3);   color: #f87171; border: 1px solid rgba(232,57,42,0.5); font-weight: 500; }
+.ev-outbound_to_main{ background: rgba(168,85,247,0.15); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.25); }
+.ev-chat_click      { background: rgba(251,191,36,0.15); color: #fde68a; border: 1px solid rgba(251,191,36,0.25); }
+.ev-prize_wheel_spin{ background: rgba(251,146,60,0.15); color: #fdba74; border: 1px solid rgba(251,146,60,0.25); }
+.ev-default         { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+.event-path { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-site { font-family: var(--mono); font-size: 10px; color: var(--faint); white-space: nowrap; }
+.event-ts   { font-family: var(--mono); font-size: 10px; color: var(--faint); white-space: nowrap; }
+
+/* ── Map ─────────────────────────────────────────────────────────────────── */
+#map-container {
+  height: 320px; border-radius: var(--radius); overflow: hidden;
+  background: var(--surface2); position: relative;
+}
+.map-placeholder {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: var(--muted); font-family: var(--mono); font-size: 12px; text-align: center; padding: 20px;
+}
+.map-dots { font-size: 28px; margin-bottom: 4px; }
+
+/* ── Journey flow ────────────────────────────────────────────────────────── */
+.journey-list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
+.journey-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: var(--surface2); border-radius: var(--radius); font-size: 12px;
+}
+.j-step { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 24px; flex-shrink: 0; }
+.j-site { font-family: var(--mono); font-size: 10px; flex-shrink: 0; }
+.j-page { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.j-count { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+
+/* ── Loading state ───────────────────────────────────────────────────────── */
+.loading { color: var(--faint); font-family: var(--mono); font-size: 12px; text-align: center; padding: 32px; }
+.skeleton {
+  background: linear-gradient(90deg, var(--surface2) 25%, var(--surface) 50%, var(--surface2) 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s infinite;
+  border-radius: var(--radius); height: 20px; margin: 6px 0;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* ── Config notice ───────────────────────────────────────────────────────── */
+.config-notice {
+  background: rgba(232,57,42,0.08); border: 1px solid rgba(232,57,42,0.25);
+  border-radius: var(--radius); padding: 12px 16px; font-family: var(--mono);
+  font-size: 11px; color: var(--muted); line-height: 1.7;
+}
+.config-notice code { color: var(--red); background: rgba(232,57,42,0.1); padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ── Login Gate ──────────────────────────────────────────────────────────── -->
+<div id="login-gate">
+  <h1>NYS <span class="word">Analytics</span></h1>
+  <div class="login-box">
+    <input type="password" id="pw-input" placeholder="Enter dashboard password" autocomplete="current-password">
+    <button onclick="checkLogin()">Access Dashboard</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+  <div style="font-family:var(--mono);font-size:10px;color:var(--faint);text-align:center;max-width:240px;">
+    Set your password and Supabase keys in the CONFIG section at the top of this file
+  </div>
+</div>
+
+<!-- ── App ─────────────────────────────────────────────────────────────────── -->
+<div id="app">
+  <header>
+    <div class="logo">NEW YORK <span>SASH</span> Analytics</div>
+    <div class="header-right">
+      <div class="live-dot" title="Live data"></div>
+      <span class="last-updated" id="last-updated">—</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Config notice (shown until keys are set) -->
+    <div class="config-notice" id="config-notice" style="display:none">
+      <strong>Setup required:</strong> Open this file and replace <code>YOUR_SUPABASE_URL</code>,
+      <code>YOUR_SUPABASE_SERVICE_KEY</code>, and <code>DASHBOARD_PASSWORD</code> at the top of
+      the &lt;script&gt; section. Then add <code>nys-track.js</code> to each site.
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <div class="range-pills">
+        <button class="pill active" data-days="7">7d</button>
+        <button class="pill" data-days="14">14d</button>
+        <button class="pill" data-days="30">30d</button>
+        <button class="pill" data-days="90">90d</button>
+      </div>
+      <select class="site-filter" id="site-filter">
+        <option value="">All sites</option>
+        <option value="newyorksash-main">newyorksash.com</option>
+        <option value="newyorksashoffers">newyorksashoffers.com</option>
+        <option value="upstatetoughny">upstatetoughny.com</option>
+        <option value="newyorksash-adirondacks">newyorksash-adirondacks.com</option>
+        <option value="newyorksashcooperstown">newyorksashcooperstown.com</option>
+        <option value="energy-effecient-cny">energy-effecient-cny.com</option>
+      </select>
+      <button class="refresh-btn" onclick="loadAll()" title="Refresh data">↻ Refresh</button>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">Unique Visitors</div><div class="kpi-value" id="kpi-visitors">—</div><div class="kpi-delta neutral" id="kpi-visitors-d"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Page Views</div><div class="kpi-value" id="kpi-pageviews">—</div><div class="kpi-delta neutral" id="kpi-pageviews-d"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Phone Clicks</div><div class="kpi-value" id="kpi-phone">—</div><div class="kpi-delta neutral" id="kpi-phone-d"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Quote Conversions</div><div class="kpi-value" id="kpi-quotes">—</div><div class="kpi-delta neutral" id="kpi-quotes-d"></div></div>
+      <div class="kpi-card"><div class="kpi-label">→ Main Site</div><div class="kpi-value" id="kpi-outbound">—</div><div class="kpi-delta neutral" id="kpi-outbound-d"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Conversion Rate</div><div class="kpi-value" id="kpi-cvr">—</div><div class="kpi-delta neutral" id="kpi-cvr-d"></div></div>
+    </div>
+
+    <!-- Traffic chart + Campaign funnel -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Traffic over time</span>
+          <span class="panel-sub" id="chart-sub">Daily page views</span>
+        </div>
+        <canvas id="traffic-chart" height="200"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Campaign funnel</span>
+          <span class="panel-sub">Visitors → Conversion</span>
+        </div>
+        <table class="funnel-table" id="funnel-table">
+          <thead><tr>
+            <th>Site</th><th>Visitors</th><th>→ Main</th><th>Quotes</th><th>CVR</th><th>Rate</th>
+          </tr></thead>
+          <tbody id="funnel-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Live event feed + User journey -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Live event feed</span>
+          <span class="panel-sub">Recent 50 events</span>
+        </div>
+        <div class="event-feed" id="event-feed">
+          <div class="loading">Loading events...</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Top user journeys</span>
+          <span class="panel-sub">Most common paths to conversion</span>
+        </div>
+        <div class="journey-list" id="journey-list">
+          <div class="loading">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Geo map -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Visitor locations</span>
+        <span class="panel-sub" id="geo-sub">Central New York + beyond</span>
+      </div>
+      <div id="map-container">
+        <div class="map-placeholder" id="map-placeholder">
+          <div class="map-dots">📍</div>
+          <div>Interactive map loads after geo data arrives.<br>
+          Requires <code>leaflet.js</code> — see instructions in source.</div>
+        </div>
+        <div id="map" style="height:100%;display:none;"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Leaflet (optional — map will show placeholder if not needed) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIG — replace these values before deploying
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+  SUPABASE_URL:        'https://iyywdyrspsiqhdnxsbzc.supabase.co',
+  SUPABASE_SERVICE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eXdkeXJzcHNpcWhkbnhzYnpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTgyNDY4NSwiZXhwIjoyMDkxNDAwNjg1fQ.TSrtxbD48aOg1ODZT3hiEWtjNW_DcOvSFeuBAE8hWGI',   // service key (NOT anon) — keep private
+  DASHBOARD_PASSWORD:  'Password123!!',                  // change this!
+};
+// ═══════════════════════════════════════════════════════════════
+
+let activeDays = 7;
+let activeSite = '';
+let trafficChart = null;
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function checkLogin() {
+  const val = document.getElementById('pw-input').value;
+  if (val === CONFIG.DASHBOARD_PASSWORD) {
+    document.getElementById('login-gate').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    if (CONFIG.SUPABASE_URL.includes('YOUR_PROJECT')) {
+      document.getElementById('config-notice').style.display = 'block';
+    }
+    loadAll();
+    setInterval(loadAll, 60000); // auto-refresh every 60s
+  } else {
+    document.getElementById('login-error').textContent = 'Incorrect password';
+    setTimeout(() => document.getElementById('login-error').textContent = '', 2000);
+  }
+}
+document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkLogin(); });
+
+// ── Supabase query helper ─────────────────────────────────────────────────────
+async function query(table, params = '') {
+  const url = `${CONFIG.SUPABASE_URL}/rest/v1/${table}?${params}`;
+  const r = await fetch(url, {
+    headers: {
+      'apikey': CONFIG.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${CONFIG.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+    }
+  });
+  if (!r.ok) throw new Error(`Supabase error: ${r.status}`);
+  return r.json();
+}
+
+function dateFrom(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
+
+function siteFilter() {
+  return activeSite ? `&site_id=eq.${encodeURIComponent(activeSite)}` : '';
+}
+
+// ── Load all panels ───────────────────────────────────────────────────────────
+async function loadAll() {
+  document.getElementById('last-updated').textContent = 'Refreshing…';
+  try {
+    await Promise.all([loadKPIs(), loadTrafficChart(), loadFunnel(), loadEventFeed(), loadJourneys(), loadGeo()]);
+    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    document.getElementById('last-updated').textContent = 'Error — check config';
+    console.error(e);
+  }
+}
+
+// ── KPIs ──────────────────────────────────────────────────────────────────────
+async function loadKPIs() {
+  const since = dateFrom(activeDays);
+  const prev  = dateFrom(activeDays * 2);
+  const sf = siteFilter();
+
+  const [current, previous] = await Promise.all([
+    query('events', `ts=gte.${since}${sf}&select=event_type,visitor_id`),
+    query('events', `ts=gte.${prev}&ts=lt.${since}${sf}&select=event_type,visitor_id`),
+  ]);
+
+  function count(arr, type) { return arr.filter(e => e.event_type === type).length; }
+  function uniq(arr, type)  { return new Set(arr.filter(e => e.event_type === type).map(e => e.visitor_id)).size; }
+
+  const stats = {
+    visitors: new Set(current.map(e => e.visitor_id)).size,
+    pageviews: count(current, 'page_view'),
+    phone:    count(current, 'phone_click'),
+    quotes:   count(current, 'quote_confirmed') + count(current, 'form_submit'),
+    outbound: count(current, 'outbound_to_main'),
+  };
+  const prev_stats = {
+    visitors: new Set(previous.map(e => e.visitor_id)).size,
+    pageviews: count(previous, 'page_view'),
+    phone:    count(previous, 'phone_click'),
+    quotes:   count(previous, 'quote_confirmed') + count(previous, 'form_submit'),
+    outbound: count(previous, 'outbound_to_main'),
+  };
+
+  const cvr = stats.visitors > 0 ? ((stats.quotes / stats.visitors) * 100).toFixed(1) : '0.0';
+
+  function setKpi(id, val, prev, isCvr = false) {
+    document.getElementById('kpi-' + id).textContent = isCvr ? val + '%' : val.toLocaleString();
+    const d = document.getElementById('kpi-' + id + '-d');
+    if (!prev || prev === 0) { d.textContent = ''; return; }
+    const pct = Math.round(((val - prev) / prev) * 100);
+    d.textContent = (pct >= 0 ? '▲ +' : '▼ ') + Math.abs(pct) + '% vs prev period';
+    d.className = 'kpi-delta ' + (pct >= 0 ? 'up' : 'down');
+  }
+
+  setKpi('visitors', stats.visitors, prev_stats.visitors);
+  setKpi('pageviews', stats.pageviews, prev_stats.pageviews);
+  setKpi('phone', stats.phone, prev_stats.phone);
+  setKpi('quotes', stats.quotes, prev_stats.quotes);
+  setKpi('outbound', stats.outbound, prev_stats.outbound);
+  document.getElementById('kpi-cvr').textContent = cvr + '%';
+}
+
+// ── Traffic chart ─────────────────────────────────────────────────────────────
+async function loadTrafficChart() {
+  const since = dateFrom(activeDays);
+  const sf = siteFilter();
+  const rows = await query('events', `ts=gte.${since}${sf}&event_type=eq.page_view&select=ts,site_id&order=ts.asc&limit=10000`);
+
+  // Group by day
+  const byDay = {};
+  rows.forEach(r => {
+    const day = r.ts.slice(0,10);
+    byDay[day] = (byDay[day] || 0) + 1;
+  });
+
+  // Fill gaps
+  const labels = [], data = [];
+  for (let i = activeDays - 1; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0,10);
+    labels.push(key.slice(5)); // MM-DD
+    data.push(byDay[key] || 0);
+  }
+
+  const ctx = document.getElementById('traffic-chart').getContext('2d');
+  if (trafficChart) trafficChart.destroy();
+  trafficChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: '#e8392a',
+        backgroundColor: 'rgba(232,57,42,0.08)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#e8392a',
+        fill: true,
+        tension: 0.4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(240,238,232,0.45)', font: { family: 'DM Mono', size: 10 }, maxTicksLimit: 8 } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(240,238,232,0.45)', font: { family: 'DM Mono', size: 10 } }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ── Campaign funnel ───────────────────────────────────────────────────────────
+async function loadFunnel() {
+  const since = dateFrom(activeDays);
+  const rows = await query('events', `ts=gte.${since}&select=event_type,site_id,visitor_id&limit=50000`);
+
+  const sites = [...new Set(rows.map(r => r.site_id))].sort();
+  const tbody = document.getElementById('funnel-body');
+
+  if (!sites.length) { tbody.innerHTML = '<tr><td colspan="6" class="loading">No data yet</td></tr>'; return; }
+
+  const maxVisitors = Math.max(...sites.map(s => new Set(rows.filter(r => r.site_id === s).map(r => r.visitor_id)).size));
+
+  tbody.innerHTML = sites.map(site => {
+    const sr = rows.filter(r => r.site_id === site);
+    const visitors = new Set(sr.map(r => r.visitor_id)).size;
+    const outbound = new Set(sr.filter(r => r.event_type === 'outbound_to_main').map(r => r.visitor_id)).size;
+    const quotes   = sr.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit').length;
+    const cvr = visitors > 0 ? ((quotes / visitors) * 100).toFixed(1) : '0.0';
+    const barW = maxVisitors > 0 ? Math.round((visitors / maxVisitors) * 100) : 0;
+    const shortSite = site.replace('newyorksash-', 'nys-');
+    return `<tr>
+      <td><span class="site-tag">${shortSite}</span></td>
+      <td>${visitors.toLocaleString()}</td>
+      <td>${outbound.toLocaleString()}</td>
+      <td>${quotes.toLocaleString()}</td>
+      <td class="conv-pct">${cvr}%</td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${barW}%"></div></div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Event feed ────────────────────────────────────────────────────────────────
+async function loadEventFeed() {
+  const sf = siteFilter();
+  const rows = await query('events', `order=ts.desc&limit=50${sf}&select=event_type,site_id,page_path,ts,phone_number,form_id`);
+
+  const feed = document.getElementById('event-feed');
+  if (!rows.length) { feed.innerHTML = '<div class="loading">No events yet</div>'; return; }
+
+  feed.innerHTML = rows.map(r => {
+    const age = timeSince(r.ts);
+    const cls = 'ev-' + r.event_type.replace(/[^a-z_]/g,'') || 'ev-default';
+    const meta = r.phone_number ? ` ${r.phone_number}` : r.form_id ? ` #${r.form_id}` : '';
+    return `<div class="event-row">
+      <span class="event-type-badge ${cls}">${r.event_type.replace(/_/g,' ')}</span>
+      <span class="event-path">${r.page_path || '/'}${meta}</span>
+      <span class="event-site">${(r.site_id||'').replace('newyorksash-','nys-')}</span>
+      <span class="event-ts">${age}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── User journeys ─────────────────────────────────────────────────────────────
+async function loadJourneys() {
+  const since = dateFrom(activeDays);
+  const sf = siteFilter();
+  const rows = await query('events', `ts=gte.${since}${sf}&event_type=eq.page_view&select=page_path,site_id&limit=20000`);
+
+  // Count page occurrences as a proxy for journey steps
+  const counts = {};
+  rows.forEach(r => {
+    const key = r.site_id + ' → ' + (r.page_path || '/');
+    counts[key] = (counts[key] || 0) + 1;
+  });
+
+  const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 15);
+  const list = document.getElementById('journey-list');
+
+  if (!sorted.length) { list.innerHTML = '<div class="loading">No journey data yet</div>'; return; }
+
+  list.innerHTML = sorted.map(([key, cnt], i) => {
+    const [site, page] = key.split(' → ');
+    return `<div class="journey-item">
+      <span class="j-step">${String(i+1).padStart(2,'0')}</span>
+      <span class="j-site site-tag">${site.replace('newyorksash-','nys-')}</span>
+      <span class="j-page">${page}</span>
+      <span class="j-count">${cnt.toLocaleString()} views</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Geo map ───────────────────────────────────────────────────────────────────
+async function loadGeo() {
+  const since = dateFrom(activeDays);
+  const sf = siteFilter();
+  const rows = await query('events', `ts=gte.${since}${sf}&lat=not.is.null&select=lat,lon,city,region,event_type&limit=5000`);
+
+  if (!rows.length || typeof L === 'undefined') return;
+
+  const mapEl = document.getElementById('map');
+  const ph    = document.getElementById('map-placeholder');
+  mapEl.style.display = 'block';
+  ph.style.display = 'none';
+
+  if (window._nyMap) { window._nyMap.remove(); window._nyMap = null; }
+
+  const map = L.map('map', { zoomControl: true, scrollWheelZoom: false });
+  window._nyMap = map;
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap, © CARTO', maxZoom: 18
+  }).addTo(map);
+
+  // Cluster by city
+  const cityMap = {};
+  rows.forEach(r => {
+    const key = `${r.city}|${r.lat}|${r.lon}`;
+    if (!cityMap[key]) cityMap[key] = { lat: r.lat, lon: r.lon, city: r.city, region: r.region, count: 0, conversions: 0 };
+    cityMap[key].count++;
+    if (r.event_type === 'quote_confirmed') cityMap[key].conversions++;
+  });
+
+  const entries = Object.values(cityMap);
+  const maxCount = Math.max(...entries.map(e => e.count));
+
+  entries.forEach(loc => {
+    const size = Math.max(8, Math.min(30, Math.round((loc.count / maxCount) * 30)));
+    const isConv = loc.conversions > 0;
+    const marker = L.circleMarker([loc.lat, loc.lon], {
+      radius: size, fillColor: isConv ? '#e8392a' : '#f0eee8',
+      color: isConv ? '#e8392a' : 'rgba(240,238,232,0.3)',
+      weight: 1, fillOpacity: isConv ? 0.7 : 0.35,
+    }).addTo(map);
+    marker.bindPopup(`<strong>${loc.city || 'Unknown'}, ${loc.region || ''}</strong><br>${loc.count} events · ${loc.conversions} conversions`);
+  });
+
+  if (entries.length > 0) {
+    const bounds = entries.map(e => [e.lat, e.lon]);
+    map.fitBounds(bounds, { padding: [20,20], maxZoom: 10 });
+  }
+
+  document.getElementById('geo-sub').textContent = `${entries.length} cities tracked`;
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function timeSince(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000)  return Math.floor(diff/1000) + 's ago';
+  if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+  return Math.floor(diff/86400000) + 'd ago';
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.pill[data-days]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    activeDays = parseInt(btn.dataset.days);
+    loadAll();
+  });
+});
+document.getElementById('site-filter').addEventListener('change', e => {
+  activeSite = e.target.value;
+  loadAll();
+});
+</script>
+</body>
+</html>
