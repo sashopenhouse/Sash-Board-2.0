@@ -136,16 +136,10 @@
       ...meta,
     };
 
-    // Fire-and-forget via sendBeacon where available, fallback to fetch
+    // Supabase requires headers, so always use fetch.
     const body = JSON.stringify(payload);
     const headers = { 'Content-Type': 'application/json', 'apikey': NYS_ANON_KEY, 'Authorization': `Bearer ${NYS_ANON_KEY}`, 'Prefer': 'return=minimal' };
-
-    if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: 'application/json' });
-      navigator.sendBeacon(NYS_ENDPOINT, blob);
-    } else {
-      fetch(NYS_ENDPOINT, { method: 'POST', headers, body, keepalive: true }).catch(() => {});
-    }
+    fetch(NYS_ENDPOINT, { method: 'POST', headers, body, keepalive: true }).catch(() => {});
   }
 
   // ── 1. Page view ────────────────────────────────────────────────────────────
