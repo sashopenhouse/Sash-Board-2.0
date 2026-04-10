@@ -19,6 +19,10 @@
   // ───────────────────────────────────────────────────────────────────────────
 
   // ── Site ID auto-detection ──────────────────────────────────────────────────
+  function isBlockedHost(host) {
+    return host.endsWith('.vercel.app');
+  }
+
   function getSiteId() {
     if (NYS_SITE_ID !== 'AUTO') return NYS_SITE_ID;
     const host = location.hostname.replace('www.', '');
@@ -211,6 +215,8 @@
 
   // ── Init ────────────────────────────────────────────────────────────────────
   function init() {
+    const host = location.hostname.replace('www.', '');
+    if (isBlockedHost(host)) return;
     trackPageView();
     trackPhoneClicks();
     trackFormSubmissions();
