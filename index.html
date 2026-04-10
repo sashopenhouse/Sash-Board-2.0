@@ -433,6 +433,13 @@ function selectedSiteLabel() {
     : 'All sites';
 }
 
+function siteLabelFromId(siteId) {
+  const select = document.getElementById('site-filter');
+  if (!select) return siteId || 'Unknown';
+  const opt = Array.from(select.options).find(o => o.value === siteId);
+  return opt ? opt.text : (siteId || 'Unknown');
+}
+
 function safeFileName(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
@@ -461,7 +468,7 @@ async function generateReportPdf() {
 
   const since = dateFrom(activeDays);
   const sf = siteFilter();
-  const rows = await query('events', `ts=gte.${since}${sf}&select=event_type,visitor_id`);
+  const rows = await query('events', `ts=gte.${since}${sf}&select=event_type,visitor_id,site_id`);
 
   if (!rows.length) {
     alert('No data for the selected range/site.');
@@ -482,6 +489,30 @@ async function generateReportPdf() {
 
   const paragraph = `For ${rangeLabel}, ${siteLabel} recorded ${visitors.toLocaleString()} unique visitors and ${pageviews.toLocaleString()} page views. We saw ${phone.toLocaleString()} phone clicks and ${quotes.toLocaleString()} quote actions, resulting in a conversion rate of ${cvr}%. There were ${outbound.toLocaleString()} clicks back to the main site.`;
 
+  const bySite = {};
+  rows.forEach(r => {
+    const key = r.site_id || 'unknown';
+    if (!bySite[key]) bySite[key] = { visitors: new Set(), quotes: 0, pageviews: 0 };
+    if (r.visitor_id) bySite[key].visitors.add(r.visitor_id);
+    if (r.event_type === 'page_view') bySite[key].pageviews++;
+    if (r.event_type === 'quote_confirmed' || r.event_type === 'form_submit') bySite[key].quotes++;
+  });
+
+  const siteRows = Object.entries(bySite).map(([siteId, stats]) => {
+    const v = stats.visitors.size;
+    const q = stats.quotes;
+    const cv = v > 0 ? ((q / v) * 100).toFixed(1) : '0.0';
+    return { siteId, visitors: v, quotes: q, pageviews: stats.pageviews, cvr: cv };
+  });
+
+  const topSites = siteRows
+    .sort((a, b) => (b.quotes - a.quotes) || (b.pageviews - a.pageviews))
+    .slice(0, 3);
+
+  const topLine = topSites.length
+    ? 'Top campaigns by quote actions: ' + topSites.map(s => `${siteLabelFromId(s.siteId)} (${s.quotes} quotes, ${s.cvr}% CVR)`).join('; ') + '.'
+    : 'Top campaigns by quote actions: No campaign breakdown available.';
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
 
@@ -501,6 +532,11 @@ async function generateReportPdf() {
   doc.setFontSize(12);
   const lines = doc.splitTextToSize(paragraph, 180);
   doc.text(lines, 14, 58);
+
+  doc.setFontSize(11);
+  const topLines = doc.splitTextToSize(topLine, 180);
+  const topY = 58 + (lines.length * 6) + 6;
+  doc.text(topLines, 14, topY);
 
   const fileBase = `nys-report-${safeFileName(siteLabel)}-${activeDays}d`;
   doc.save(`${fileBase}.pdf`);
