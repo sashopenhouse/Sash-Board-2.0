@@ -15,7 +15,7 @@
   const NYS_SITE_ID  = 'AUTO'; // 'AUTO' = detect from hostname, or set manually
                                 // e.g. 'newyorksash-main' | 'newyorksashoffers'
                                 // | 'upstatetoughny' | 'newyorksash-adirondacks'
-                                // | 'newyorksash-cooperstown' | 'energy-effecient-cny'
+                                // | 'newyorksash-cooperstown' | 'energy-efficient-cny'
   // ───────────────────────────────────────────────────────────────────────────
 
   // ── Site ID auto-detection ──────────────────────────────────────────────────
@@ -28,7 +28,7 @@
       'upstatetoughny.com':           'upstatetoughny',
       'newyorksash-adirondacks.com':  'newyorksash-adirondacks',
       'newyorksash-cooperstown.com':  'newyorksash-cooperstown',
-      'energy-effecient-cny.com':     'energy-effecient-cny',
+      'energy-efficient-cny.com':    'energy-efficient-cny',
     };
     return map[host] || host;
   }
