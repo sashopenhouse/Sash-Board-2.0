@@ -127,6 +127,7 @@ You should see your page_view event appear within a few seconds.
 | `chat_click` | User clicks a chat button |
 | `prize_wheel_spin` | Spin button clicked |
 | `prize_wheel_claim` | Claim button clicked |
+| `click_map` | Click point captured for daily heatmap hotspots |
 
 ---
 

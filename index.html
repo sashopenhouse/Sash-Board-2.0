@@ -226,6 +226,30 @@ select.site-filter:focus { border-color: var(--border-hi); }
 .source-name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-count { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
 
+/* ── Click heatmap ───────────────────────────────────────────────────────── */
+.heatmap-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.heatmap-controls label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+select.page-filter {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--white); font-family: var(--mono); font-size: 11px; padding: 5px 10px;
+  outline: none; cursor: pointer; min-width: 220px;
+}
+.heatmap-stage {
+  position: relative; width: 100%; height: 420px; border-radius: var(--radius);
+  border: 1px solid var(--border); overflow: hidden; background: var(--surface2);
+}
+.heatmap-screenshot {
+  position: absolute; inset: 0; background-size: cover; background-position: top center;
+  filter: brightness(0.72) contrast(1.05);
+}
+.heatmap-overlay {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+.heatmap-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-family: var(--mono); font-size: 12px; text-align: center; padding: 16px;
+}
+
 /* ── Loading state ───────────────────────────────────────────────────────── */
 .loading { color: var(--faint); font-family: var(--mono); font-size: 12px; text-align: center; padding: 32px; }
 .skeleton {
@@ -376,6 +400,22 @@ select.site-filter:focus { border-color: var(--border-hi); }
       </div>
     </div>
 
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Daily click heatmap</span>
+        <span class="panel-sub" id="heatmap-sub">Hotspots from last 24 hours</span>
+      </div>
+      <div class="heatmap-controls">
+        <label for="heatmap-page-filter">Page</label>
+        <select id="heatmap-page-filter" class="page-filter"></select>
+      </div>
+      <div class="heatmap-stage">
+        <div id="heatmap-screenshot" class="heatmap-screenshot"></div>
+        <canvas id="heatmap-canvas" class="heatmap-overlay"></canvas>
+        <div id="heatmap-empty" class="heatmap-empty">Select a site to view daily click hotspots.</div>
+      </div>
+    </div>
+
     <!-- Geo map -->
     <div class="panel">
       <div class="panel-header">
@@ -413,6 +453,8 @@ const CONFIG = {
 let activeDays = 7;
 let activeSite = '';
 let trafficChart = null;
+let heatmapRows = [];
+let heatmapPagePath = '';
 const OWNED_HOSTS = [
   'newyorksash.com',
   'newyorksashoffers.com',
@@ -421,6 +463,14 @@ const OWNED_HOSTS = [
   'newyorksash-cooperstown.com',
   'energy-efficient-cny.com'
 ];
+const SITE_URLS = {
+  'newyorksash-main': 'https://newyorksash.com',
+  'newyorksashoffers': 'https://newyorksashoffers.com',
+  'upstatetoughny': 'https://upstatetoughny.com',
+  'newyorksash-adirondacks': 'https://newyorksash-adirondacks.com',
+  'newyorksash-cooperstown': 'https://newyorksash-cooperstown.com',
+  'energy-efficient-cny': 'https://energy-efficient-cny.com',
+};
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function checkLogin() {
@@ -639,12 +689,130 @@ async function generateReportPdf() {
 async function loadAll() {
   document.getElementById('last-updated').textContent = 'Refreshing…';
   try {
-    await Promise.all([loadKPIs(), loadTrafficChart(), loadFunnel(), loadEventFeed(), loadJourneys(), loadSources(), loadGeo()]);
+    await Promise.all([loadKPIs(), loadTrafficChart(), loadFunnel(), loadEventFeed(), loadJourneys(), loadSources(), loadHeatmap(), loadGeo()]);
     document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
   } catch(e) {
     document.getElementById('last-updated').textContent = 'Error — check config';
     console.error(e);
   }
+}
+
+// ── Daily click heatmap ──────────────────────────────────────────────────────
+function getHeatmapScreenshotUrl(siteId, path) {
+  const base = SITE_URLS[siteId] || '';
+  if (!base) return '';
+  const full = `${base}${path || '/'}`;
+  return `https://image.thum.io/get/width/1280/crop/900/noanimate/${full}`;
+}
+
+function parseClickPoint(raw) {
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    if (typeof data.x !== 'number' || typeof data.y !== 'number') return null;
+    if (data.x < 0 || data.x > 1 || data.y < 0 || data.y > 1) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function renderHeatmap() {
+  const emptyEl = document.getElementById('heatmap-empty');
+  const screenEl = document.getElementById('heatmap-screenshot');
+  const canvas = document.getElementById('heatmap-canvas');
+  const subEl = document.getElementById('heatmap-sub');
+
+  if (!activeSite) {
+    emptyEl.style.display = 'flex';
+    screenEl.style.backgroundImage = 'none';
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    subEl.textContent = 'Hotspots from last 24 hours';
+    return;
+  }
+
+  const pageRows = heatmapRows.filter(r => r.page_path === heatmapPagePath);
+  const screenshotUrl = getHeatmapScreenshotUrl(activeSite, heatmapPagePath || '/');
+  screenEl.style.backgroundImage = screenshotUrl ? `url('${screenshotUrl}')` : 'none';
+
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, width, height);
+
+  if (!pageRows.length) {
+    emptyEl.style.display = 'flex';
+    emptyEl.textContent = 'No click hotspot data yet for this page in the last 24 hours.';
+    subEl.textContent = 'Hotspots from last 24 hours';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  subEl.textContent = `${pageRows.length.toLocaleString()} tracked clicks in last 24 hours`;
+
+  pageRows.forEach(row => {
+    const point = parseClickPoint(row.link_text);
+    if (!point) return;
+    const x = point.x * width;
+    const y = point.y * height;
+    const grad = ctx.createRadialGradient(x, y, 2, x, y, 44);
+    grad.addColorStop(0, 'rgba(255, 87, 34, 0.58)');
+    grad.addColorStop(0.4, 'rgba(255, 152, 0, 0.34)');
+    grad.addColorStop(1, 'rgba(255, 152, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, 44, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+async function loadHeatmap() {
+  const pageFilter = document.getElementById('heatmap-page-filter');
+  const emptyEl = document.getElementById('heatmap-empty');
+
+  if (!activeSite) {
+    heatmapRows = [];
+    heatmapPagePath = '';
+    pageFilter.innerHTML = '<option value="">Select a site first</option>';
+    emptyEl.textContent = 'Select a site to view daily click hotspots.';
+    renderHeatmap();
+    return;
+  }
+
+  const since = dateFrom(1);
+  const rows = await query('events', `ts=gte.${since}&site_id=eq.${encodeURIComponent(activeSite)}&event_type=eq.click_map&select=page_path,link_text,ts&order=ts.desc&limit=50000`);
+
+  heatmapRows = rows;
+  const pageCounts = {};
+  rows.forEach(r => {
+    const key = r.page_path || '/';
+    pageCounts[key] = (pageCounts[key] || 0) + 1;
+  });
+
+  const pageOptions = Object.entries(pageCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 30);
+
+  if (!pageOptions.length) {
+    pageFilter.innerHTML = '<option value="">No click data in last 24h</option>';
+    heatmapPagePath = '';
+    emptyEl.textContent = 'No click hotspot data yet for this site in the last 24 hours.';
+    renderHeatmap();
+    return;
+  }
+
+  if (!pageOptions.some(([path]) => path === heatmapPagePath)) {
+    heatmapPagePath = pageOptions[0][0];
+  }
+
+  pageFilter.innerHTML = pageOptions.map(([path, count]) => (
+    `<option value="${path}" ${path === heatmapPagePath ? 'selected' : ''}>${path} (${count})</option>`
+  )).join('');
+
+  renderHeatmap();
 }
 
 // ── Traffic sources ─────────────────────────────────────────────────────────
@@ -938,7 +1106,17 @@ document.querySelectorAll('.pill[data-days]').forEach(btn => {
 });
 document.getElementById('site-filter').addEventListener('change', e => {
   activeSite = e.target.value;
+  heatmapPagePath = '';
   loadAll();
+});
+
+document.getElementById('heatmap-page-filter').addEventListener('change', e => {
+  heatmapPagePath = e.target.value;
+  renderHeatmap();
+});
+
+window.addEventListener('resize', () => {
+  if (heatmapRows.length) renderHeatmap();
 });
 </script>
 </body>

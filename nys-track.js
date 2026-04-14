@@ -213,6 +213,32 @@
     });
   }
 
+  // ── 7. Click heatmap points ─────────────────────────────────────────────────
+  // Stores normalized click coordinates in link_text so dashboard can render hotspots
+  let lastHeatTs = 0;
+  function trackClickHeatmap() {
+    document.addEventListener('click', function (e) {
+      const target = e.target.closest('a, button, [role="button"], input[type="submit"], input[type="button"], .btn, [onclick]');
+      if (!target) return;
+
+      const now = Date.now();
+      if (now - lastHeatTs < 400) return; // basic throttle
+      lastHeatTs = now;
+
+      const x = window.innerWidth > 0 ? (e.clientX / window.innerWidth) : 0;
+      const y = window.innerHeight > 0 ? (e.clientY / window.innerHeight) : 0;
+      const payload = {
+        x: Number(x.toFixed(4)),
+        y: Number(y.toFixed(4)),
+        path: location.pathname || '/',
+        target: (target.tagName || '').toLowerCase(),
+        text: (target.innerText || target.value || '').trim().slice(0, 80),
+      };
+
+      fire('click_map', { link_text: JSON.stringify(payload) });
+    }, { passive: true });
+  }
+
   // ── Init ────────────────────────────────────────────────────────────────────
   function init() {
     const host = location.hostname.replace('www.', '');
@@ -223,6 +249,7 @@
     trackOutboundLinks();
     trackPrizeWheel();
     trackChatClicks();
+    trackClickHeatmap();
   }
 
   if (document.readyState === 'loading') {
