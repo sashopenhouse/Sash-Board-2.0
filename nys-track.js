@@ -225,11 +225,18 @@
       if (now - lastHeatTs < 400) return; // basic throttle
       lastHeatTs = now;
 
-      const x = window.innerWidth > 0 ? (e.clientX / window.innerWidth) : 0;
-      const y = window.innerHeight > 0 ? (e.clientY / window.innerHeight) : 0;
+      const docWidth = Math.max(document.documentElement.scrollWidth || 0, document.body.scrollWidth || 0, window.innerWidth || 0);
+      const docHeight = Math.max(document.documentElement.scrollHeight || 0, document.body.scrollHeight || 0, window.innerHeight || 0);
+      const pageX = (window.scrollX || window.pageXOffset || 0) + e.clientX;
+      const pageY = (window.scrollY || window.pageYOffset || 0) + e.clientY;
+      const x = docWidth > 0 ? (pageX / docWidth) : 0;
+      const y = docHeight > 0 ? (pageY / docHeight) : 0;
       const payload = {
         x: Number(x.toFixed(4)),
         y: Number(y.toFixed(4)),
+        coord_space: 'document',
+        doc_width: docWidth,
+        doc_height: docHeight,
         path: location.pathname || '/',
         target: (target.tagName || '').toLowerCase(),
         text: (target.innerText || target.value || '').trim().slice(0, 80),
