@@ -235,15 +235,19 @@ select.page-filter {
   outline: none; cursor: pointer; min-width: 220px;
 }
 .heatmap-stage {
-  position: relative; width: 100%; height: 420px; border-radius: var(--radius);
-  border: 1px solid var(--border); overflow: hidden; background: var(--surface2);
+  position: relative; width: 100%; height: 680px; border-radius: var(--radius);
+  border: 1px solid var(--border); overflow: auto; background: var(--surface2);
+}
+.heatmap-content {
+  position: relative; width: 100%; min-height: 100%;
 }
 .heatmap-screenshot {
-  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: top center;
+  display: block; width: 100%; height: auto;
   filter: brightness(0.72) contrast(1.05);
 }
 .heatmap-overlay {
-  position: absolute; inset: 0; width: 100%; height: 100%;
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
 }
 .heatmap-empty {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -410,8 +414,10 @@ select.page-filter {
         <select id="heatmap-page-filter" class="page-filter"></select>
       </div>
       <div class="heatmap-stage">
-        <img id="heatmap-screenshot" class="heatmap-screenshot" alt="Site screenshot for click heatmap">
-        <canvas id="heatmap-canvas" class="heatmap-overlay"></canvas>
+        <div id="heatmap-content" class="heatmap-content">
+          <img id="heatmap-screenshot" class="heatmap-screenshot" alt="Site screenshot for click heatmap">
+          <canvas id="heatmap-canvas" class="heatmap-overlay"></canvas>
+        </div>
         <div id="heatmap-empty" class="heatmap-empty">Select a site to view daily click hotspots.</div>
       </div>
     </div>
@@ -702,7 +708,7 @@ function getHeatmapScreenshotUrl(siteId, path) {
   const base = SITE_URLS[siteId] || '';
   if (!base) return '';
   const full = `${base}${path || '/'}`;
-  return `https://image.thum.io/get/fullpage/noanimate/width/1280/${full}`;
+  return `https://image.thum.io/get/fullpage/noanimate/width/1600/viewportWidth/1600/${full}`;
 }
 
 function parseClickPoint(raw) {
@@ -711,7 +717,13 @@ function parseClickPoint(raw) {
     const data = JSON.parse(raw);
     if (typeof data.x !== 'number' || typeof data.y !== 'number') return null;
     if (data.x < 0 || data.x > 1 || data.y < 0 || data.y > 1) return null;
-    return data;
+    return {
+      x: data.x,
+      y: data.y,
+      doc_width: typeof data.doc_width === 'number' ? data.doc_width : null,
+      doc_height: typeof data.doc_height === 'number' ? data.doc_height : null,
+      coord_space: data.coord_space || 'viewport',
+    };
   } catch {
     return null;
   }
@@ -720,12 +732,14 @@ function parseClickPoint(raw) {
 function renderHeatmap() {
   const emptyEl = document.getElementById('heatmap-empty');
   const screenEl = document.getElementById('heatmap-screenshot');
+  const contentEl = document.getElementById('heatmap-content');
   const canvas = document.getElementById('heatmap-canvas');
   const subEl = document.getElementById('heatmap-sub');
 
   if (!activeSite) {
     emptyEl.style.display = 'flex';
     screenEl.removeAttribute('src');
+    contentEl.style.minHeight = '100%';
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     subEl.textContent = 'Hotspots from last 24 hours';
@@ -733,19 +747,26 @@ function renderHeatmap() {
   }
 
   const pageRows = heatmapRows.filter(r => r.page_path === heatmapPagePath);
+  const parsedPoints = pageRows.map(r => parseClickPoint(r.link_text)).filter(Boolean);
+  const desktopPoints = parsedPoints.filter(p => !p.doc_width || p.doc_width >= 1024);
+  const points = desktopPoints.length ? desktopPoints : parsedPoints;
   const screenshotUrl = getHeatmapScreenshotUrl(activeSite, heatmapPagePath || '/');
   if (screenshotUrl && screenEl.src !== screenshotUrl) {
     screenEl.src = screenshotUrl;
   }
 
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
+  const width = Math.round(screenEl.clientWidth || canvas.clientWidth || 0);
+  const height = Math.round(screenEl.clientHeight || canvas.clientHeight || 0);
+  if (!width || !height) return;
+  contentEl.style.height = `${height}px`;
   canvas.width = width;
   canvas.height = height;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, width, height);
 
-  if (!pageRows.length) {
+  if (!points.length) {
     emptyEl.style.display = 'flex';
     emptyEl.textContent = 'No click hotspot data yet for this page in the last 24 hours.';
     subEl.textContent = 'Hotspots from last 24 hours';
@@ -753,28 +774,12 @@ function renderHeatmap() {
   }
 
   emptyEl.style.display = 'none';
-  subEl.textContent = `${pageRows.length.toLocaleString()} tracked clicks in last 24 hours`;
+  subEl.textContent = `${points.length.toLocaleString()} tracked clicks in last 24 hours (desktop-aligned)`;
 
-  const naturalW = screenEl.naturalWidth || 0;
-  const naturalH = screenEl.naturalHeight || 0;
-  if (!naturalW || !naturalH) {
-    emptyEl.style.display = 'flex';
-    emptyEl.textContent = 'Loading screenshot…';
-    return;
-  }
-
-  const scale = Math.min(width / naturalW, height / naturalH);
-  const drawW = naturalW * scale;
-  const drawH = naturalH * scale;
-  const offsetX = (width - drawW) / 2;
-  const offsetY = 0;
-
-  pageRows.forEach(row => {
-    const point = parseClickPoint(row.link_text);
-    if (!point) return;
-    const x = offsetX + (point.x * drawW);
-    const y = offsetY + (point.y * drawH);
-    if (x < offsetX || x > offsetX + drawW || y < offsetY || y > offsetY + drawH) return;
+  points.forEach(point => {
+    const x = point.x * width;
+    const y = point.y * height;
+    if (x < 0 || x > width || y < 0 || y > height) return;
     const grad = ctx.createRadialGradient(x, y, 2, x, y, 44);
     grad.addColorStop(0, 'rgba(255, 87, 34, 0.58)');
     grad.addColorStop(0.4, 'rgba(255, 152, 0, 0.34)');
