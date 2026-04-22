@@ -106,6 +106,34 @@ LIMIT 20;
 
 You should see your page_view event appear within a few seconds.
 
+## Local full-stack run (dashboard + /api/query)
+
+Run this from the project root:
+
+```bash
+python local_server.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080
+```
+
+The local server serves `index.html` and also provides `/api/query`.
+
+- If `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` are set (or placed in `.env.local`), `/api/query` reads directly from Supabase.
+- If they are not set, `/api/query` automatically proxies to `https://sash-board-2-0.vercel.app/api/query` so local UI still shows live data.
+
+Example `.env.local`:
+
+```env
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_SERVICE_KEY=YOUR_SERVICE_ROLE_KEY
+PORT=8080
+HOST=127.0.0.1
+```
+
 ### If events stop appearing
 
 - Open a tracked page with `?nys_debug=1` (or run `localStorage.setItem('nys_debug','1')` in DevTools), then click around and watch Console for `[nys-track]` errors.
