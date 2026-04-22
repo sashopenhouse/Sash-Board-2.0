@@ -106,6 +106,11 @@ LIMIT 20;
 
 You should see your page_view event appear within a few seconds.
 
+### If events stop appearing
+
+- Open a tracked page with `?nys_debug=1` (or run `localStorage.setItem('nys_debug','1')` in DevTools), then click around and watch Console for `[nys-track]` errors.
+- Tracking is intentionally blocked only on local/dev hosts (`localhost`, `127.0.0.1`, and `sash-board-2-0.vercel.app`). If your production site runs on a different host, it should still track.
+
 ---
 
 ## Adding more campaigns in future

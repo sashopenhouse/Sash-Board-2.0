@@ -20,7 +20,22 @@
 
   // ── Site ID auto-detection ──────────────────────────────────────────────────
   function isBlockedHost(host) {
-    return host.endsWith('.vercel.app');
+    const blockedHosts = new Set([
+      'localhost',
+      '127.0.0.1',
+      'sash-board-2-0.vercel.app',
+    ]);
+    return blockedHosts.has(host);
+  }
+
+  function isDebugEnabled() {
+    try {
+      const byQuery = new URLSearchParams(location.search).get('nys_debug') === '1';
+      const byStorage = localStorage.getItem('nys_debug') === '1';
+      return byQuery || byStorage;
+    } catch {
+      return false;
+    }
   }
 
   function getSiteId() {
@@ -143,7 +158,17 @@
     // Supabase requires headers, so always use fetch.
     const body = JSON.stringify(payload);
     const headers = { 'Content-Type': 'application/json', 'apikey': NYS_ANON_KEY, 'Authorization': `Bearer ${NYS_ANON_KEY}`, 'Prefer': 'return=minimal' };
-    fetch(NYS_ENDPOINT, { method: 'POST', headers, body, keepalive: true }).catch(() => {});
+    fetch(NYS_ENDPOINT, { method: 'POST', headers, body, keepalive: true })
+      .then((response) => {
+        if (!response.ok && isDebugEnabled()) {
+          console.warn('[nys-track] Event rejected', response.status, eventType, payload);
+        }
+      })
+      .catch((error) => {
+        if (isDebugEnabled()) {
+          console.warn('[nys-track] Event failed', eventType, error);
+        }
+      });
   }
 
   // ── 1. Page view ────────────────────────────────────────────────────────────
