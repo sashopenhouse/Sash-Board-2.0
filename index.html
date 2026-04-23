@@ -883,8 +883,8 @@ async function loadKPIs() {
   const sf = siteFilter();
 
   const [current, previous] = await Promise.all([
-    query('events', `ts=gte.${since}${sf}&select=event_type,visitor_id`),
-    query('events', `ts=gte.${prev}&ts=lt.${since}${sf}&select=event_type,visitor_id`),
+    query('events', `ts=gte.${since}${sf}&select=event_type,visitor_id&order=ts.desc&limit=50000`),
+    query('events', `ts=gte.${prev}&ts=lt.${since}${sf}&select=event_type,visitor_id&order=ts.desc&limit=50000`),
   ]);
 
   function count(arr, type) { return arr.filter(e => e.event_type === type).length; }
@@ -928,7 +928,7 @@ async function loadKPIs() {
 async function loadTrafficChart() {
   const since = dateFrom(activeDays);
   const sf = siteFilter();
-  const rows = await query('events', `ts=gte.${since}${sf}&event_type=eq.page_view&select=ts,site_id&order=ts.asc&limit=10000`);
+  const rows = await query('events', `ts=gte.${since}${sf}&event_type=eq.page_view&select=ts,site_id&order=ts.desc&limit=50000`);
 
   // Group by day
   const byDay = {};
@@ -977,7 +977,7 @@ async function loadTrafficChart() {
 // ── Campaign funnel ───────────────────────────────────────────────────────────
 async function loadFunnel() {
   const since = dateFrom(activeDays);
-  const rows = await query('events', `ts=gte.${since}&select=event_type,site_id,visitor_id&limit=50000`);
+  const rows = await query('events', `ts=gte.${since}&select=event_type,site_id,visitor_id&order=ts.desc&limit=50000`);
 
   const sites = [...new Set(rows.map(r => r.site_id))].sort();
   const tbody = document.getElementById('funnel-body');
