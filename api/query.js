@@ -19,7 +19,9 @@ export default async function handler(req, res) {
     'events',
     'v_daily_summary',
     'v_campaign_funnel',
-    'v_geo_summary'
+    'v_geo_summary',
+    'meta_ads_daily',
+    'v_meta_ads_daily_summary'
   ]);
 
   if (!table || !allowedTables.has(table)) {

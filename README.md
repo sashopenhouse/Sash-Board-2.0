@@ -139,6 +139,34 @@ HOST=127.0.0.1
 - Open a tracked page with `?nys_debug=1` (or run `localStorage.setItem('nys_debug','1')` in DevTools), then click around and watch Console for `[nys-track]` errors.
 - Tracking is intentionally blocked only on local/dev hosts (`localhost`, `127.0.0.1`, and `sash-board-2-0.vercel.app`). If your production site runs on a different host, it should still track.
 
+## Meta Ads view setup
+
+The dashboard now includes a separate **Meta Ads** tab.
+
+1. Re-run `supabase-schema.sql` in Supabase SQL Editor (it adds `meta_ads_daily` and `v_meta_ads_daily_summary`)
+2. Import your Meta daily export into `meta_ads_daily`
+3. Open dashboard and switch to **Meta Ads** tab
+
+Required columns for `meta_ads_daily` imports:
+
+- `date` (date)
+- `account_id`, `account_name`
+- `campaign_id`, `campaign_name`
+- `spend`, `impressions`, `clicks`, `leads`, `purchase_value`
+
+Optional columns:
+
+- `adset_id`, `adset_name`, `ad_id`, `ad_name`
+
+If the Meta tab shows no rows, verify data exists:
+
+```sql
+SELECT date, account_name, campaign_name, spend, impressions, clicks, leads, purchase_value
+FROM meta_ads_daily
+ORDER BY date DESC
+LIMIT 20;
+```
+
 ---
 
 ## Adding more campaigns in future

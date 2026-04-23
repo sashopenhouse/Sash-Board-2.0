@@ -83,6 +83,15 @@ main { flex: 1; padding: 24px; max-width: 1400px; width: 100%; margin: 0 auto; d
 .controls {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
 }
+.view-tabs { display: flex; gap: 6px; }
+.view-tab {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; color: var(--muted); cursor: pointer;
+  font-family: var(--mono); font-size: 11px; padding: 5px 12px;
+  transition: all 0.15s; white-space: nowrap;
+}
+.view-tab:hover { border-color: var(--border-hi); color: var(--white); }
+.view-tab.active { background: var(--red-lo); border-color: var(--red); color: var(--white); }
 .range-pills { display: flex; gap: 4px; }
 .pill {
   background: var(--surface2); border: 1px solid var(--border);
@@ -270,6 +279,7 @@ select.page-filter {
   font-size: 11px; color: var(--muted); line-height: 1.7;
 }
 .config-notice code { color: var(--red); background: rgba(232,57,42,0.1); padding: 1px 5px; border-radius: 3px; }
+.meta-helper { font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -308,6 +318,10 @@ select.page-filter {
 
     <!-- Controls -->
     <div class="controls">
+      <div class="view-tabs">
+        <button class="view-tab active" data-view="web">Website</button>
+        <button class="view-tab" data-view="meta">Meta Ads</button>
+      </div>
       <div class="range-pills">
         <button class="pill active" data-days="7">7d</button>
         <button class="pill" data-days="14">14d</button>
@@ -323,10 +337,14 @@ select.page-filter {
         <option value="newyorksash-cooperstown">newyorksash-cooperstown.com</option>
         <option value="energy-efficient-cny">energy-efficient-cny.com</option>
       </select>
-      <button class="report-btn" onclick="generateReportPdf()" title="Download PDF report">Report PDF</button>
-      <button class="refresh-btn" onclick="loadAll()" title="Refresh data">↻ Refresh</button>
+      <select class="site-filter" id="meta-account-filter" style="display:none">
+        <option value="">All ad accounts</option>
+      </select>
+      <button class="report-btn" id="report-btn" onclick="generateReportPdf()" title="Download PDF report">Report PDF</button>
+      <button class="refresh-btn" onclick="refreshActiveView()" title="Refresh data">↻ Refresh</button>
     </div>
 
+    <div id="web-view">
     <!-- KPI cards -->
     <div class="kpi-grid" id="kpi-grid">
       <div class="kpi-card"><div class="kpi-label">Unique Visitors</div><div class="kpi-value" id="kpi-visitors">—</div><div class="kpi-delta neutral" id="kpi-visitors-d"></div></div>
@@ -438,6 +456,51 @@ select.page-filter {
       </div>
     </div>
 
+    </div>
+
+    <div id="meta-view" style="display:none">
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-label">Spend</div><div class="kpi-value" id="meta-kpi-spend">—</div><div class="kpi-delta neutral">Selected range</div></div>
+        <div class="kpi-card"><div class="kpi-label">Impressions</div><div class="kpi-value" id="meta-kpi-impressions">—</div><div class="kpi-delta neutral">Selected range</div></div>
+        <div class="kpi-card"><div class="kpi-label">Clicks</div><div class="kpi-value" id="meta-kpi-clicks">—</div><div class="kpi-delta neutral">Selected range</div></div>
+        <div class="kpi-card"><div class="kpi-label">Leads</div><div class="kpi-value" id="meta-kpi-leads">—</div><div class="kpi-delta neutral">Selected range</div></div>
+        <div class="kpi-card"><div class="kpi-label">CPL</div><div class="kpi-value" id="meta-kpi-cpl">—</div><div class="kpi-delta neutral">Spend / Leads</div></div>
+        <div class="kpi-card"><div class="kpi-label">ROAS</div><div class="kpi-value" id="meta-kpi-roas">—</div><div class="kpi-delta neutral">Revenue / Spend</div></div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Meta spend over time</span>
+            <span class="panel-sub" id="meta-chart-sub">Daily spend</span>
+          </div>
+          <canvas id="meta-chart" height="200"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Top campaigns</span>
+            <span class="panel-sub">By spend (selected range)</span>
+          </div>
+          <table class="funnel-table">
+            <thead><tr>
+              <th>Campaign</th><th>Spend</th><th>Leads</th><th>CPL</th><th>ROAS</th><th>CTR</th>
+            </tr></thead>
+            <tbody id="meta-campaign-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Meta data source</span>
+          <span class="panel-sub">Supabase table: meta_ads_daily</span>
+        </div>
+        <div class="meta-helper">
+          Import your daily Meta export into <strong>meta_ads_daily</strong>. This view uses <strong>v_meta_ads_daily_summary</strong> for charting and KPIs.
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -458,7 +521,10 @@ const CONFIG = {
 
 let activeDays = 7;
 let activeSite = '';
+let activeMetaAccount = '';
+let currentView = 'web';
 let trafficChart = null;
+let metaChart = null;
 let heatmapRows = [];
 let heatmapPagePath = '';
 const OWNED_HOSTS = [
@@ -487,8 +553,8 @@ function checkLogin() {
     if (!CONFIG.API_BASE) {
       document.getElementById('config-notice').style.display = 'block';
     }
-    loadAll();
-    setInterval(loadAll, 5000); // auto-refresh every 5s
+    refreshActiveView();
+    setInterval(refreshActiveView, 5000); // auto-refresh every 5s
   } else {
     document.getElementById('login-error').textContent = 'Incorrect password';
     setTimeout(() => document.getElementById('login-error').textContent = '', 2000);
@@ -513,6 +579,10 @@ function dateFrom(days) {
 
 function siteFilter() {
   return activeSite ? `&site_id=eq.${encodeURIComponent(activeSite)}` : '';
+}
+
+function metaAccountFilter() {
+  return activeMetaAccount ? `&account_id=eq.${encodeURIComponent(activeMetaAccount)}` : '';
 }
 
 function normalizeReferrer(ref) {
@@ -693,6 +763,7 @@ async function generateReportPdf() {
 
 // ── Load all panels ───────────────────────────────────────────────────────────
 async function loadAll() {
+  if (currentView !== 'web') return;
   document.getElementById('last-updated').textContent = 'Refreshing…';
   try {
     await Promise.all([loadKPIs(), loadTrafficChart(), loadFunnel(), loadEventFeed(), loadJourneys(), loadSources(), loadHeatmap(), loadGeo()]);
@@ -701,6 +772,190 @@ async function loadAll() {
     document.getElementById('last-updated').textContent = 'Error — check config';
     console.error(e);
   }
+}
+
+async function ensureMetaAccountOptions() {
+  const select = document.getElementById('meta-account-filter');
+  const since = dateFrom(90).slice(0, 10);
+  const rows = await query('meta_ads_daily', `date=gte.${since}&select=account_id,account_name&order=date.desc&limit=50000`);
+  const seen = new Map();
+  rows.forEach(r => {
+    if (!r.account_id) return;
+    if (!seen.has(r.account_id)) seen.set(r.account_id, r.account_name || r.account_id);
+  });
+  const options = ['<option value="">All ad accounts</option>'];
+  Array.from(seen.entries()).forEach(([id, name]) => {
+    const selected = id === activeMetaAccount ? 'selected' : '';
+    options.push(`<option value="${id}" ${selected}>${name}</option>`);
+  });
+  select.innerHTML = options.join('');
+}
+
+function formatMoney(value) {
+  return '$' + Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+function formatDecimal(value, digits = 2) {
+  return Number(value || 0).toFixed(digits);
+}
+
+async function loadMetaKPIs() {
+  const daySince = dateFrom(activeDays).slice(0, 10);
+  const af = metaAccountFilter();
+  const rows = await query('v_meta_ads_daily_summary', `day=gte.${daySince}${af}&select=spend,impressions,clicks,leads,purchase_value&limit=50000`);
+
+  const totals = rows.reduce((acc, r) => {
+    acc.spend += Number(r.spend || 0);
+    acc.impressions += Number(r.impressions || 0);
+    acc.clicks += Number(r.clicks || 0);
+    acc.leads += Number(r.leads || 0);
+    acc.purchase_value += Number(r.purchase_value || 0);
+    return acc;
+  }, { spend: 0, impressions: 0, clicks: 0, leads: 0, purchase_value: 0 });
+
+  const cpl = totals.leads > 0 ? totals.spend / totals.leads : 0;
+  const roas = totals.spend > 0 ? totals.purchase_value / totals.spend : 0;
+
+  document.getElementById('meta-kpi-spend').textContent = formatMoney(totals.spend);
+  document.getElementById('meta-kpi-impressions').textContent = totals.impressions.toLocaleString();
+  document.getElementById('meta-kpi-clicks').textContent = totals.clicks.toLocaleString();
+  document.getElementById('meta-kpi-leads').textContent = totals.leads.toLocaleString();
+  document.getElementById('meta-kpi-cpl').textContent = '$' + formatDecimal(cpl, 2);
+  document.getElementById('meta-kpi-roas').textContent = formatDecimal(roas, 2) + 'x';
+}
+
+async function loadMetaChart() {
+  const daySince = dateFrom(activeDays).slice(0, 10);
+  const af = metaAccountFilter();
+  const rows = await query('v_meta_ads_daily_summary', `day=gte.${daySince}${af}&select=day,spend,leads&order=day.asc&limit=50000`);
+
+  const byDay = {};
+  rows.forEach(r => {
+    const day = r.day;
+    if (!byDay[day]) byDay[day] = { spend: 0, leads: 0 };
+    byDay[day].spend += Number(r.spend || 0);
+    byDay[day].leads += Number(r.leads || 0);
+  });
+
+  const labels = [], spendData = [], leadsData = [];
+  for (let i = activeDays - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    labels.push(key.slice(5));
+    spendData.push(Number((byDay[key]?.spend || 0).toFixed(2)));
+    leadsData.push(byDay[key]?.leads || 0);
+  }
+
+  const ctx = document.getElementById('meta-chart').getContext('2d');
+  if (metaChart) metaChart.destroy();
+  metaChart = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'line',
+          label: 'Spend',
+          data: spendData,
+          borderColor: '#e8392a',
+          backgroundColor: 'rgba(232,57,42,0.08)',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.3,
+          yAxisID: 'ySpend'
+        },
+        {
+          type: 'bar',
+          label: 'Leads',
+          data: leadsData,
+          backgroundColor: 'rgba(148, 163, 184, 0.5)',
+          borderColor: 'rgba(148, 163, 184, 0.8)',
+          borderWidth: 1,
+          yAxisID: 'yLeads'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: 'rgba(240,238,232,0.65)' } } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(240,238,232,0.45)', font: { family: 'DM Mono', size: 10 } } },
+        ySpend: { position: 'left', grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(240,238,232,0.45)', callback: (v) => '$' + v } },
+        yLeads: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: 'rgba(240,238,232,0.45)' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+async function loadMetaCampaigns() {
+  const daySince = dateFrom(activeDays).slice(0, 10);
+  const af = metaAccountFilter();
+  const rows = await query('v_meta_ads_daily_summary', `day=gte.${daySince}${af}&select=campaign_name,spend,impressions,clicks,leads,purchase_value&limit=50000`);
+  const tbody = document.getElementById('meta-campaign-body');
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">No Meta ads rows in selected range</td></tr>';
+    return;
+  }
+
+  const byCampaign = {};
+  rows.forEach(r => {
+    const key = r.campaign_name || 'Unknown campaign';
+    if (!byCampaign[key]) byCampaign[key] = { spend: 0, impressions: 0, clicks: 0, leads: 0, purchase_value: 0 };
+    byCampaign[key].spend += Number(r.spend || 0);
+    byCampaign[key].impressions += Number(r.impressions || 0);
+    byCampaign[key].clicks += Number(r.clicks || 0);
+    byCampaign[key].leads += Number(r.leads || 0);
+    byCampaign[key].purchase_value += Number(r.purchase_value || 0);
+  });
+
+  const top = Object.entries(byCampaign)
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 20);
+
+  tbody.innerHTML = top.map(c => {
+    const cpl = c.leads > 0 ? c.spend / c.leads : 0;
+    const roas = c.spend > 0 ? c.purchase_value / c.spend : 0;
+    const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+    return `<tr>
+      <td>${c.name}</td>
+      <td>${formatMoney(c.spend)}</td>
+      <td>${c.leads.toLocaleString()}</td>
+      <td>$${formatDecimal(cpl, 2)}</td>
+      <td>${formatDecimal(roas, 2)}x</td>
+      <td>${formatDecimal(ctr, 2)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadMetaAll() {
+  if (currentView !== 'meta') return;
+  document.getElementById('last-updated').textContent = 'Refreshing…';
+  try {
+    await ensureMetaAccountOptions();
+    await Promise.all([loadMetaKPIs(), loadMetaChart(), loadMetaCampaigns()]);
+    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('last-updated').textContent = 'Error — check Meta data setup';
+    console.error(e);
+  }
+}
+
+function refreshActiveView() {
+  if (currentView === 'meta') return loadMetaAll();
+  return loadAll();
+}
+
+function setDashboardView(view) {
+  currentView = view;
+  document.getElementById('web-view').style.display = view === 'web' ? 'block' : 'none';
+  document.getElementById('meta-view').style.display = view === 'meta' ? 'block' : 'none';
+  document.getElementById('site-filter').style.display = view === 'web' ? '' : 'none';
+  document.getElementById('meta-account-filter').style.display = view === 'meta' ? '' : 'none';
+  document.getElementById('report-btn').style.display = view === 'web' ? '' : 'none';
+  document.querySelectorAll('.view-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
+  refreshActiveView();
 }
 
 // ── Daily click heatmap ──────────────────────────────────────────────────────
@@ -1125,13 +1380,22 @@ document.querySelectorAll('.pill[data-days]').forEach(btn => {
     document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     activeDays = parseInt(btn.dataset.days);
-    loadAll();
+    refreshActiveView();
   });
 });
 document.getElementById('site-filter').addEventListener('change', e => {
   activeSite = e.target.value;
   heatmapPagePath = '';
-  loadAll();
+  if (currentView === 'web') loadAll();
+});
+
+document.getElementById('meta-account-filter').addEventListener('change', e => {
+  activeMetaAccount = e.target.value;
+  if (currentView === 'meta') loadMetaAll();
+});
+
+document.querySelectorAll('.view-tab').forEach(btn => {
+  btn.addEventListener('click', () => setDashboardView(btn.dataset.view));
 });
 
 document.getElementById('heatmap-page-filter').addEventListener('change', e => {

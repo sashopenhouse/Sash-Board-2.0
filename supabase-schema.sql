@@ -112,7 +112,44 @@ WHERE city IS NOT NULL
 GROUP BY city, region, country
 ORDER BY page_views DESC;
 
--- ── Row Level Security ────────────────────────────────────────────────────────
+-- Meta ads daily import table (populate from your Meta export/ETL)
+CREATE TABLE IF NOT EXISTS public.meta_ads_daily (
+  id bigserial primary key,
+  date date not null,
+  account_id text,
+  account_name text,
+  campaign_id text,
+  campaign_name text,
+  adset_id text,
+  adset_name text,
+  ad_id text,
+  ad_name text,
+  spend numeric(12,2) default 0,
+  impressions int default 0,
+  clicks int default 0,
+  leads int default 0,
+  purchase_value numeric(12,2) default 0,
+  created_at timestamptz default now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_meta_ads_daily_date ON public.meta_ads_daily(date);
+CREATE INDEX IF NOT EXISTS idx_meta_ads_daily_account ON public.meta_ads_daily(account_id);
+CREATE INDEX IF NOT EXISTS idx_meta_ads_daily_campaign ON public.meta_ads_daily(campaign_id);
+
+CREATE OR REPLACE VIEW public.v_meta_ads_daily_summary AS
+SELECT
+  date AS day,
+  account_id,
+  account_name,
+  campaign_id,
+  campaign_name,
+  SUM(COALESCE(spend, 0))::numeric(12,2) AS spend,
+  SUM(COALESCE(impressions, 0))::bigint AS impressions,
+  SUM(COALESCE(clicks, 0))::bigint AS clicks,
+  SUM(COALESCE(leads, 0))::bigint AS leads,
+  SUM(COALESCE(purchase_value, 0))::numeric(12,2) AS purchase_value
+FROM public.meta_ads_daily
+GROUP BY 1,2,3,4,5;
 -- Allow anonymous INSERT (the tracker fires without login)
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 
