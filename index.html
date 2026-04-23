@@ -927,14 +927,16 @@ async function loadKPIs() {
 // ── Traffic chart ─────────────────────────────────────────────────────────────
 async function loadTrafficChart() {
   const since = dateFrom(activeDays);
+  const daySince = since.slice(0, 10);
   const sf = siteFilter();
-  const rows = await query('events', `ts=gte.${since}${sf}&event_type=eq.page_view&select=ts,site_id&order=ts.desc&limit=50000`);
+  const rows = await query('v_daily_summary', `day=gte.${daySince}${sf}&select=day,site_id,page_views&order=day.asc&limit=5000`);
 
   // Group by day
   const byDay = {};
   rows.forEach(r => {
-    const day = r.ts.slice(0,10);
-    byDay[day] = (byDay[day] || 0) + 1;
+    const day = r.day;
+    const views = Number(r.page_views || 0);
+    byDay[day] = (byDay[day] || 0) + views;
   });
 
   // Fill gaps
