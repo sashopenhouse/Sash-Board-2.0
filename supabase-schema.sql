@@ -150,9 +150,17 @@ SELECT
   SUM(COALESCE(purchase_value, 0))::numeric(12,2) AS purchase_value
 FROM public.meta_ads_daily
 GROUP BY 1,2,3,4,5;
+
 -- Allow anonymous INSERT (the tracker fires without login)
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
-
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'events' AND policyname = 'allow_anon_insert'
+  ) THEN
+    EXECUTE 'DROP POLICY "allow_anon_insert" ON public.events';
+  END IF;
+END$$;
 CREATE POLICY "allow_anon_insert" ON events
   FOR INSERT TO anon
   WITH CHECK (true);
