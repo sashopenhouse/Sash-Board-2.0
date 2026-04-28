@@ -294,7 +294,8 @@ select.page-filter {
     <div class="login-error" id="login-error"></div>
   </div>
   <div style="font-family:var(--mono);font-size:10px;color:var(--faint);text-align:center;max-width:240px;">
-    For access, contact <a href="mailto:eflorez@newyorksash.com" style="color:var(--muted);text-decoration:none;">support</a>.
+    For access, contact <a href="mailto:eflorez@newyorksash.com" style="color:var(--muted);text-decoration:none;">support</a>.<br>
+    <a href="privacy-policy.html" target="_blank" style="color:var(--muted);text-decoration:underline;display:inline-block;margin-top:8px;">Privacy Policy</a>
   </div>
 </div>
 
@@ -527,6 +528,7 @@ let trafficChart = null;
 let metaChart = null;
 let heatmapRows = [];
 let heatmapPagePath = '';
+let refreshInterval = null;
 const OWNED_HOSTS = [
   'newyorksash.com',
   'newyorksashoffers.com',
@@ -554,13 +556,19 @@ function checkLogin() {
       document.getElementById('config-notice').style.display = 'block';
     }
     refreshActiveView();
-    setInterval(refreshActiveView, 5000); // auto-refresh every 5s
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(refreshActiveView, 5000); // auto-refresh every 5s
   } else {
     document.getElementById('login-error').textContent = 'Incorrect password';
     setTimeout(() => document.getElementById('login-error').textContent = '', 2000);
   }
 }
 document.getElementById('pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkLogin(); });
+
+// Optional: clear interval on logout or reload
+window.addEventListener('beforeunload', () => {
+  if (refreshInterval) clearInterval(refreshInterval);
+});
 
 // ── Supabase query helper ─────────────────────────────────────────────────────
 async function query(table, params = '') {
