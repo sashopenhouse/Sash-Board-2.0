@@ -556,8 +556,9 @@ function checkLogin() {
       document.getElementById('config-notice').style.display = 'block';
     }
     refreshActiveView();
+    // Auto-refresh disabled; dashboard only reloads on manual refresh or tab change
     if (refreshInterval) clearInterval(refreshInterval);
-    refreshInterval = setInterval(refreshActiveView, 5000); // auto-refresh every 5s
+    // refreshInterval = setInterval(refreshActiveView, 5000); // auto-refresh every 5s (disabled)
   } else {
     document.getElementById('login-error').textContent = 'Incorrect password';
     setTimeout(() => document.getElementById('login-error').textContent = '', 2000);
