@@ -65,6 +65,7 @@ CREATE INDEX IF NOT EXISTS idx_events_utm        ON events (utm_campaign, utm_so
 -- ── Convenience views ─────────────────────────────────────────────────────────
 
 -- Daily site summary
+DROP VIEW IF EXISTS v_daily_summary CASCADE;
 CREATE OR REPLACE VIEW v_daily_summary AS
 SELECT
   DATE(ts)                                       AS day,
@@ -72,24 +73,29 @@ SELECT
   COUNT(*) FILTER (WHERE event_type = 'page_view')           AS page_views,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'page_view') AS unique_visitors,
   COUNT(*) FILTER (WHERE event_type = 'phone_click')         AS phone_clicks,
-  COUNT(*) FILTER (WHERE event_type = 'form_submit')         AS form_submits,
-  COUNT(*) FILTER (WHERE event_type = 'quote_confirmed')     AS quote_confirmations,
   COUNT(*) FILTER (WHERE event_type = 'outbound_to_main')    AS outbound_to_main,
+  -- Combined leads (Quotes + Chat Leads)
+  COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'chat_lead')) AS leads,
+  -- Breakdowns for deep-diving if needed
+  COUNT(*) FILTER (WHERE event_type = 'quote_confirmed')     AS quote_confirmations,
+  COUNT(*) FILTER (WHERE event_type = 'form_submit')         AS form_submits,
+  COUNT(*) FILTER (WHERE event_type = 'chat_lead')          AS chat_leads,
   COUNT(*) FILTER (WHERE event_type = 'chat_click')          AS chat_clicks
 FROM events
 GROUP BY 1, 2
 ORDER BY 1 DESC, 2;
 
 -- Campaign conversion funnel (last 30 days)
+DROP VIEW IF EXISTS v_campaign_funnel CASCADE;
 CREATE OR REPLACE VIEW v_campaign_funnel AS
 SELECT
   site_id,
   COUNT(DISTINCT visitor_id)                                         AS total_visitors,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'outbound_to_main') AS clicked_to_main,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'phone_click')      AS phone_contacts,
-  COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead'))  AS quote_conversions,
+  COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'chat_lead'))  AS quote_conversions,
   ROUND(
-    100.0 * COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead'))
+    100.0 * COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'chat_lead'))
     / NULLIF(COUNT(DISTINCT visitor_id), 0), 2
   )                                                                          AS conversion_rate_pct
 FROM events
@@ -136,6 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_meta_ads_daily_date ON public.meta_ads_daily(date
 CREATE INDEX IF NOT EXISTS idx_meta_ads_daily_account ON public.meta_ads_daily(account_id);
 CREATE INDEX IF NOT EXISTS idx_meta_ads_daily_campaign ON public.meta_ads_daily(campaign_id);
 
+DROP VIEW IF EXISTS public.v_meta_ads_daily_summary CASCADE;
 CREATE OR REPLACE VIEW public.v_meta_ads_daily_summary AS
 SELECT
   date AS day,

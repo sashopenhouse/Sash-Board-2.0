@@ -674,7 +674,7 @@ async function generateReportPdf() {
   const visitors = new Set(rows.map(r => r.visitor_id)).size;
   const pageviews = rows.filter(r => r.event_type === 'page_view').length;
   const phone = rows.filter(r => r.event_type === 'phone_click').length;
-  const quotes = rows.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead').length;
+  const quotes = rows.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'chat_lead').length;
   const outbound = rows.filter(r => r.event_type === 'outbound_to_main').length;
   const cvr = visitors > 0 ? ((quotes / visitors) * 100).toFixed(1) : '0.0';
 
@@ -691,7 +691,7 @@ async function generateReportPdf() {
     if (!bySite[key]) bySite[key] = { visitors: new Set(), quotes: 0, pageviews: 0 };
     if (r.visitor_id) bySite[key].visitors.add(r.visitor_id);
     if (r.event_type === 'page_view') bySite[key].pageviews++;
-    if (r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead') bySite[key].quotes++;
+    if (r.event_type === 'quote_confirmed' || r.event_type === 'chat_lead') bySite[key].quotes++;
   });
 
   const siteRows = Object.entries(bySite).map(([siteId, stats]) => {
@@ -1144,30 +1144,31 @@ async function loadSources() {
 async function loadKPIs() {
   const since = dateFrom(activeDays);
   const prev  = dateFrom(activeDays * 2);
+  const sinceDay = since.split('T')[0];
+  const prevDay  = prev.split('T')[0];
   const sf = siteFilter();
 
-  const [current, previous] = await Promise.all([
-    query('events', `ts=gte.${since}${sf}&event_type=neq.click_map&select=event_type,visitor_id&order=ts.desc&limit=50000`),
-    query('events', `ts=gte.${prev}&ts=lt.${since}${sf}&event_type=neq.click_map&select=event_type,visitor_id&order=ts.desc&limit=50000`),
-  ]);
+  // Pull from the daily summary view to avoid row-limit issues with raw events
+  const rows = await query('v_daily_summary', `day=gte.${prevDay}${sf}&select=day,unique_visitors,page_views,phone_clicks,leads,outbound_to_main`);
 
-  function count(arr, type) { return arr.filter(e => e.event_type === type).length; }
-  function uniq(arr, type)  { return new Set(arr.filter(e => e.event_type === type).map(e => e.visitor_id)).size; }
+  const current  = rows.filter(r => r.day >= sinceDay);
+  const previous = rows.filter(r => r.day < sinceDay && r.day >= prevDay);
+
+  function sum(arr, key) { return arr.reduce((acc, r) => acc + (Number(r[key]) || 0), 0); }
 
   const stats = {
-    visitors: new Set(current.map(e => e.visitor_id)).size,
-    pageviews: count(current, 'page_view'),
-    phone:    count(current, 'phone_click'),
-    // Show total number of quote form submissions (not deduplicated)
-    quotes:   current.filter(e => e.event_type === 'quote_confirmed' || e.event_type === 'form_submit' || e.event_type === 'chat_lead').length,
-    outbound: count(current, 'outbound_to_main'),
+    visitors: sum(current, 'unique_visitors'),
+    pageviews: sum(current, 'page_views'),
+    phone:    sum(current, 'phone_clicks'),
+    quotes:   sum(current, 'leads'),
+    outbound: sum(current, 'outbound_to_main'),
   };
   const prev_stats = {
-    visitors: new Set(previous.map(e => e.visitor_id)).size,
-    pageviews: count(previous, 'page_view'),
-    phone:    count(previous, 'phone_click'),
-    quotes:   previous.filter(e => e.event_type === 'quote_confirmed' || e.event_type === 'form_submit' || e.event_type === 'chat_lead').length,
-    outbound: count(previous, 'outbound_to_main'),
+    visitors: sum(previous, 'unique_visitors'),
+    pageviews: sum(previous, 'page_views'),
+    phone:    sum(previous, 'phone_clicks'),
+    quotes:   sum(previous, 'leads'),
+    outbound: sum(previous, 'outbound_to_main'),
   };
 
   const cvr = stats.visitors > 0 ? ((stats.quotes / stats.visitors) * 100).toFixed(1) : '0.0';
@@ -1244,28 +1245,37 @@ async function loadTrafficChart() {
 // ── Campaign funnel ───────────────────────────────────────────────────────────
 async function loadFunnel() {
   const since = dateFrom(activeDays);
-  const rows = await query('events', `ts=gte.${since}&event_type=neq.click_map&select=event_type,site_id,visitor_id&order=ts.desc&limit=50000`);
+  const sinceDay = since.split('T')[0];
+  
+  // Pull from the daily summary view to avoid row-limit issues
+  const rows = await query('v_daily_summary', `day=gte.${sinceDay}&select=site_id,unique_visitors,outbound_to_main,leads`);
 
   const sites = [...new Set(rows.map(r => r.site_id))].sort();
   const tbody = document.getElementById('funnel-body');
 
   if (!sites.length) { tbody.innerHTML = '<tr><td colspan="6" class="loading">No data yet</td></tr>'; return; }
 
-  const maxVisitors = Math.max(...sites.map(s => new Set(rows.filter(r => r.site_id === s).map(r => r.visitor_id)).size));
+  // Aggregate by site
+  const siteStats = {};
+  rows.forEach(r => {
+    if (!siteStats[r.site_id]) siteStats[r.site_id] = { visitors: 0, outbound: 0, quotes: 0 };
+    siteStats[r.site_id].visitors += Number(r.unique_visitors) || 0;
+    siteStats[r.site_id].outbound += Number(r.outbound_to_main) || 0;
+    siteStats[r.site_id].quotes += Number(r.leads) || 0;
+  });
 
-  tbody.innerHTML = sites.map(site => {
-    const sr = rows.filter(r => r.site_id === site);
-    const visitors = new Set(sr.map(r => r.visitor_id)).size;
-    const outbound = new Set(sr.filter(r => r.event_type === 'outbound_to_main').map(r => r.visitor_id)).size;
-    const quotes   = sr.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead').length;
-    const cvr = visitors > 0 ? ((quotes / visitors) * 100).toFixed(1) : '0.0';
-    const barW = maxVisitors > 0 ? Math.round((visitors / maxVisitors) * 100) : 0;
-    const shortSite = site.replace('newyorksash-', 'nys-');
+  const statsList = Object.entries(siteStats).map(([site_id, data]) => ({ site_id, ...data }));
+  const maxVisitors = Math.max(...statsList.map(s => s.visitors));
+
+  tbody.innerHTML = statsList.map(item => {
+    const cvr = item.visitors > 0 ? ((item.quotes / item.visitors) * 100).toFixed(1) : '0.0';
+    const barW = maxVisitors > 0 ? Math.round((item.visitors / maxVisitors) * 100) : 0;
+    const shortSite = item.site_id.replace('newyorksash-', 'nys-');
     return `<tr>
       <td><span class="site-tag">${shortSite}</span></td>
-      <td>${visitors.toLocaleString()}</td>
-      <td>${outbound.toLocaleString()}</td>
-      <td>${quotes.toLocaleString()}</td>
+      <td>${item.visitors.toLocaleString()}</td>
+      <td>${item.outbound.toLocaleString()}</td>
+      <td>${item.quotes.toLocaleString()}</td>
       <td class="conv-pct">${cvr}%</td>
       <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${barW}%"></div></div></td>
     </tr>`;
