@@ -351,7 +351,7 @@ select.page-filter {
       <div class="kpi-card"><div class="kpi-label">Unique Visitors</div><div class="kpi-value" id="kpi-visitors">—</div><div class="kpi-delta neutral" id="kpi-visitors-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Page Views</div><div class="kpi-value" id="kpi-pageviews">—</div><div class="kpi-delta neutral" id="kpi-pageviews-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Phone Clicks</div><div class="kpi-value" id="kpi-phone">—</div><div class="kpi-delta neutral" id="kpi-phone-d"></div></div>
-      <div class="kpi-card"><div class="kpi-label">Quote Conversions</div><div class="kpi-value" id="kpi-quotes">—</div><div class="kpi-delta neutral" id="kpi-quotes-d"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Total Leads</div><div class="kpi-value" id="kpi-quotes">—</div><div class="kpi-delta neutral" id="kpi-quotes-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">→ Main Site</div><div class="kpi-value" id="kpi-outbound">—</div><div class="kpi-delta neutral" id="kpi-outbound-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Conversion Rate</div><div class="kpi-value" id="kpi-cvr">—</div><div class="kpi-delta neutral" id="kpi-cvr-d"></div></div>
     </div>
@@ -674,7 +674,7 @@ async function generateReportPdf() {
   const visitors = new Set(rows.map(r => r.visitor_id)).size;
   const pageviews = rows.filter(r => r.event_type === 'page_view').length;
   const phone = rows.filter(r => r.event_type === 'phone_click').length;
-  const quotes = rows.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit').length;
+  const quotes = rows.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead').length;
   const outbound = rows.filter(r => r.event_type === 'outbound_to_main').length;
   const cvr = visitors > 0 ? ((quotes / visitors) * 100).toFixed(1) : '0.0';
 
@@ -691,7 +691,7 @@ async function generateReportPdf() {
     if (!bySite[key]) bySite[key] = { visitors: new Set(), quotes: 0, pageviews: 0 };
     if (r.visitor_id) bySite[key].visitors.add(r.visitor_id);
     if (r.event_type === 'page_view') bySite[key].pageviews++;
-    if (r.event_type === 'quote_confirmed' || r.event_type === 'form_submit') bySite[key].quotes++;
+    if (r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead') bySite[key].quotes++;
   });
 
   const siteRows = Object.entries(bySite).map(([siteId, stats]) => {
@@ -1158,14 +1158,15 @@ async function loadKPIs() {
     visitors: new Set(current.map(e => e.visitor_id)).size,
     pageviews: count(current, 'page_view'),
     phone:    count(current, 'phone_click'),
-    quotes:   count(current, 'quote_confirmed') + count(current, 'form_submit'),
+    // Show total number of quote form submissions (not deduplicated)
+    quotes:   current.filter(e => e.event_type === 'quote_confirmed' || e.event_type === 'form_submit' || e.event_type === 'chat_lead').length,
     outbound: count(current, 'outbound_to_main'),
   };
   const prev_stats = {
     visitors: new Set(previous.map(e => e.visitor_id)).size,
     pageviews: count(previous, 'page_view'),
     phone:    count(previous, 'phone_click'),
-    quotes:   count(previous, 'quote_confirmed') + count(previous, 'form_submit'),
+    quotes:   previous.filter(e => e.event_type === 'quote_confirmed' || e.event_type === 'form_submit' || e.event_type === 'chat_lead').length,
     outbound: count(previous, 'outbound_to_main'),
   };
 
@@ -1256,7 +1257,7 @@ async function loadFunnel() {
     const sr = rows.filter(r => r.site_id === site);
     const visitors = new Set(sr.map(r => r.visitor_id)).size;
     const outbound = new Set(sr.filter(r => r.event_type === 'outbound_to_main').map(r => r.visitor_id)).size;
-    const quotes   = sr.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit').length;
+    const quotes   = sr.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead').length;
     const cvr = visitors > 0 ? ((quotes / visitors) * 100).toFixed(1) : '0.0';
     const barW = maxVisitors > 0 ? Math.round((visitors / maxVisitors) * 100) : 0;
     const shortSite = site.replace('newyorksash-', 'nys-');

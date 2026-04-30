@@ -87,9 +87,9 @@ SELECT
   COUNT(DISTINCT visitor_id)                                         AS total_visitors,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'outbound_to_main') AS clicked_to_main,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'phone_click')      AS phone_contacts,
-  COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'quote_confirmed')  AS quote_conversions,
+  COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead'))  AS quote_conversions,
   ROUND(
-    100.0 * COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'quote_confirmed')
+    100.0 * COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead'))
     / NULLIF(COUNT(DISTINCT visitor_id), 0), 2
   )                                                                          AS conversion_rate_pct
 FROM events

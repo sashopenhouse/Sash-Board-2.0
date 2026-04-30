@@ -193,6 +193,10 @@
     document.addEventListener('submit', function (e) {
       const form = e.target;
       if (!form || form.tagName !== 'FORM') return;
+
+      // Skip if form is explicitly marked for manual tracking only
+      if (form.hasAttribute('data-nys-ignore') || form.classList.contains('nys-ignore')) return;
+
       const id    = (form.id || '').toLowerCase();
       const cls   = (form.className || '').toLowerCase();
       const isQuote = /quote|estimate|contact|lead|request|free/i.test(id + ' ' + cls + ' ' + document.title);
