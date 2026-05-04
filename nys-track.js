@@ -41,6 +41,15 @@
   function getSiteId() {
     if (NYS_SITE_ID !== 'AUTO') return NYS_SITE_ID;
     const host = location.hostname.replace('www.', '');
+    const path = location.pathname;
+
+    // Check for specific campaign paths on the main domain first
+    if (host === 'newyorksash.com') {
+      if (path.includes('energy-efficient')) return 'nys-campaign-energy';
+      if (path.includes('bathroom-promo'))  return 'nys-campaign-bath';
+      if (path.includes('window-offer'))    return 'nys-campaign-windows';
+    }
+
     const map = {
       'newyorksash.com':              'newyorksash-main',
       'newyorksashoffers.com':        'newyorksashoffers',
@@ -215,9 +224,24 @@
       const a = e.target.closest('a[href]');
       if (!a) return;
       const href = a.href || '';
-      // Flag links pointing to the main site from a campaign site
-      if (/newyorksash\.com/i.test(href) && getSiteId() !== 'newyorksash-main') {
-        fire('outbound_to_main', { destination_url: href, link_text: a.innerText.trim().slice(0, 100) });
+      const currentSite = getSiteId();
+      
+      // 1. External campaign domain -> main site
+      const isMainSiteLink = /newyorksash\.com/i.test(href);
+      const isMainSiteNow  = currentSite === 'newyorksash-main';
+      
+      if (isMainSiteLink && !isMainSiteNow) {
+        // If we are on the main domain but in a sub-folder campaign (e.g. /energy-efficient/)
+        // and we click a link that goes to the root (/) or a non-campaign page, count it.
+        const targetPath = new URL(a.href, location.origin).pathname;
+        const currentPath = location.pathname;
+        
+        const isHeadingToHome = targetPath === '/' || targetPath === '/index.html';
+        const isStayingInCampaign = targetPath.includes('energy-efficient') || targetPath.includes('bathroom-promo');
+        
+        if (isHeadingToHome || !isStayingInCampaign) {
+          fire('outbound_to_main', { destination_url: href, link_text: a.innerText.trim().slice(0, 100) });
+        }
       }
     });
   }

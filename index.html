@@ -484,9 +484,9 @@ select.page-filter {
           </div>
           <table class="funnel-table">
             <thead><tr>
-              <th>Campaign</th><th>Spend</th><th>Leads</th><th>CPL</th><th>ROAS</th><th>CTR</th>
+              <th>Campaign</th><th>Spend</th><th>Meta Leads</th><th>Our Leads</th><th>CPL</th><th>ROAS</th><th>CTR</th>
             </tr></thead>
-            <tbody id="meta-campaign-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+            <tbody id="meta-campaign-body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -544,6 +544,9 @@ const SITE_URLS = {
   'newyorksash-adirondacks': 'https://newyorksash-adirondacks.com',
   'newyorksash-cooperstown': 'https://newyorksash-cooperstown.com',
   'energy-efficient-cny': 'https://energy-efficient-cny.com',
+  'nys-campaign-energy': 'https://newyorksash.com',
+  'nys-campaign-bath': 'https://newyorksash.com',
+  'nys-campaign-windows': 'https://newyorksash.com',
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -674,7 +677,7 @@ async function generateReportPdf() {
   const visitors = new Set(rows.map(r => r.visitor_id)).size;
   const pageviews = rows.filter(r => r.event_type === 'page_view').length;
   const phone = rows.filter(r => r.event_type === 'phone_click').length;
-  const quotes = rows.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'chat_lead').length;
+  const quotes = rows.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead').length;
   const outbound = rows.filter(r => r.event_type === 'outbound_to_main').length;
   const cvr = visitors > 0 ? ((quotes / visitors) * 100).toFixed(1) : '0.0';
 
@@ -691,7 +694,7 @@ async function generateReportPdf() {
     if (!bySite[key]) bySite[key] = { visitors: new Set(), quotes: 0, pageviews: 0 };
     if (r.visitor_id) bySite[key].visitors.add(r.visitor_id);
     if (r.event_type === 'page_view') bySite[key].pageviews++;
-    if (r.event_type === 'quote_confirmed' || r.event_type === 'chat_lead') bySite[key].quotes++;
+    if (r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead') bySite[key].quotes++;
   });
 
   const siteRows = Object.entries(bySite).map(([siteId, stats]) => {
@@ -808,11 +811,7 @@ function formatDecimal(value, digits = 2) {
   return Number(value || 0).toFixed(digits);
 }
 
-async function loadMetaKPIs() {
-  const daySince = dateFrom(activeDays).slice(0, 10);
-  const af = metaAccountFilter();
-  const rows = await query('v_meta_ads_daily_summary', `day=gte.${daySince}${af}&select=spend,impressions,clicks,leads,purchase_value&limit=50000`);
-
+async function loadMetaKPIs(rows, internalLeads) {
   const totals = rows.reduce((acc, r) => {
     acc.spend += Number(r.spend || 0);
     acc.impressions += Number(r.impressions || 0);
@@ -822,31 +821,34 @@ async function loadMetaKPIs() {
     return acc;
   }, { spend: 0, impressions: 0, clicks: 0, leads: 0, purchase_value: 0 });
 
-  const cpl = totals.leads > 0 ? totals.spend / totals.leads : 0;
+  const internalLeadCount = internalLeads.length;
+  const cpl = internalLeadCount > 0 ? totals.spend / internalLeadCount : (totals.leads > 0 ? totals.spend / totals.leads : 0);
   const roas = totals.spend > 0 ? totals.purchase_value / totals.spend : 0;
 
   document.getElementById('meta-kpi-spend').textContent = formatMoney(totals.spend);
   document.getElementById('meta-kpi-impressions').textContent = totals.impressions.toLocaleString();
   document.getElementById('meta-kpi-clicks').textContent = totals.clicks.toLocaleString();
-  document.getElementById('meta-kpi-leads').textContent = totals.leads.toLocaleString();
+  document.getElementById('meta-kpi-leads').innerHTML = `${totals.leads.toLocaleString()} <span style="font-size:10px;opacity:0.6;font-weight:400;">(${internalLeadCount} Internal)</span>`;
   document.getElementById('meta-kpi-cpl').textContent = '$' + formatDecimal(cpl, 2);
   document.getElementById('meta-kpi-roas').textContent = formatDecimal(roas, 2) + 'x';
 }
 
-async function loadMetaChart() {
-  const daySince = dateFrom(activeDays).slice(0, 10);
-  const af = metaAccountFilter();
-  const rows = await query('v_meta_ads_daily_summary', `day=gte.${daySince}${af}&select=day,spend,leads&order=day.asc&limit=50000`);
-
+async function loadMetaChart(rows, internalLeads) {
   const byDay = {};
   rows.forEach(r => {
     const day = r.day;
-    if (!byDay[day]) byDay[day] = { spend: 0, leads: 0 };
+    if (!byDay[day]) byDay[day] = { spend: 0, leads: 0, internalLeads: 0 };
     byDay[day].spend += Number(r.spend || 0);
     byDay[day].leads += Number(r.leads || 0);
   });
+  
+  internalLeads.forEach(l => {
+    const day = l.ts.slice(0, 10);
+    if (!byDay[day]) byDay[day] = { spend: 0, leads: 0, internalLeads: 0 };
+    byDay[day].internalLeads++;
+  });
 
-  const labels = [], spendData = [], leadsData = [];
+  const labels = [], spendData = [], leadsData = [], internalData = [];
   for (let i = activeDays - 1; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -854,6 +856,7 @@ async function loadMetaChart() {
     labels.push(key.slice(5));
     spendData.push(Number((byDay[key]?.spend || 0).toFixed(2)));
     leadsData.push(byDay[key]?.leads || 0);
+    internalData.push(byDay[key]?.internalLeads || 0);
   }
 
   const ctx = document.getElementById('meta-chart').getContext('2d');
@@ -875,10 +878,19 @@ async function loadMetaChart() {
         },
         {
           type: 'bar',
-          label: 'Leads',
+          label: 'Meta Leads',
           data: leadsData,
-          backgroundColor: 'rgba(148, 163, 184, 0.5)',
-          borderColor: 'rgba(148, 163, 184, 0.8)',
+          backgroundColor: 'rgba(148, 163, 184, 0.3)',
+          borderColor: 'rgba(148, 163, 184, 0.5)',
+          borderWidth: 1,
+          yAxisID: 'yLeads'
+        },
+        {
+          type: 'bar',
+          label: 'Internal Leads',
+          data: internalData,
+          backgroundColor: 'rgba(34, 197, 94, 0.4)',
+          borderColor: 'rgba(34, 197, 94, 0.6)',
           borderWidth: 1,
           yAxisID: 'yLeads'
         }
@@ -896,21 +908,32 @@ async function loadMetaChart() {
   });
 }
 
-async function loadMetaCampaigns() {
-  const daySince = dateFrom(activeDays).slice(0, 10);
-  const af = metaAccountFilter();
-  const rows = await query('v_meta_ads_daily_summary', `day=gte.${daySince}${af}&select=campaign_name,spend,impressions,clicks,leads,purchase_value&limit=50000`);
+async function loadMetaCampaigns(rows, internalLeads) {
   const tbody = document.getElementById('meta-campaign-body');
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="loading">No Meta ads rows in selected range</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">No Meta ads rows in selected range</td></tr>';
     return;
   }
 
+  // Aggregate internal leads by campaign ID (if present in UTMs)
+  const internalLeadsByCampaign = {};
+  internalLeads.forEach(l => {
+    const cid = l.utm_campaign;
+    if (cid) internalLeadsByCampaign[cid] = (internalLeadsByCampaign[cid] || 0) + 1;
+  });
+
   const byCampaign = {};
   rows.forEach(r => {
-    const key = r.campaign_name || 'Unknown campaign';
-    if (!byCampaign[key]) byCampaign[key] = { spend: 0, impressions: 0, clicks: 0, leads: 0, purchase_value: 0 };
+    const key = r.campaign_id || r.campaign_name || 'Unknown campaign';
+    if (!byCampaign[key]) {
+      byCampaign[key] = { 
+        name: r.campaign_name, 
+        spend: 0, impressions: 0, clicks: 0, leads: 0, 
+        purchase_value: 0, 
+        internalLeads: internalLeadsByCampaign[r.campaign_id] || 0 
+      };
+    }
     byCampaign[key].spend += Number(r.spend || 0);
     byCampaign[key].impressions += Number(r.impressions || 0);
     byCampaign[key].clicks += Number(r.clicks || 0);
@@ -931,6 +954,7 @@ async function loadMetaCampaigns() {
       <td>${c.name}</td>
       <td>${formatMoney(c.spend)}</td>
       <td>${c.leads.toLocaleString()}</td>
+      <td style="color:#22c55e;font-weight:600;">${c.internalLeads.toLocaleString()}</td>
       <td>$${formatDecimal(cpl, 2)}</td>
       <td>${formatDecimal(roas, 2)}x</td>
       <td>${formatDecimal(ctr, 2)}%</td>
@@ -942,8 +966,21 @@ async function loadMetaAll() {
   if (currentView !== 'meta') return;
   document.getElementById('last-updated').textContent = 'Refreshing…';
   try {
+    const since = dateFrom(activeDays);
+    const sinceDay = since.slice(0, 10);
+    const af = metaAccountFilter();
+
+    // Fetch both Meta API data and our Internal UTM data
+    const [metaRows, internalLeads] = await Promise.all([
+      query('v_meta_ads_daily_summary', `day=gte.${sinceDay}${af}&select=day,campaign_id,campaign_name,spend,impressions,clicks,leads,purchase_value&order=day.asc&limit=50000`),
+      query('events', `ts=gte.${since}&utm_source=eq.fb&event_type=in.(quote_confirmed,form_submit,chat_lead)&select=id,ts,utm_campaign`)
+    ]);
+
     await ensureMetaAccountOptions();
-    await Promise.all([loadMetaKPIs(), loadMetaChart(), loadMetaCampaigns()]);
+    loadMetaKPIs(metaRows, internalLeads);
+    loadMetaChart(metaRows, internalLeads);
+    loadMetaCampaigns(metaRows, internalLeads);
+    
     document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
   } catch (e) {
     document.getElementById('last-updated').textContent = 'Error — check Meta data setup';
