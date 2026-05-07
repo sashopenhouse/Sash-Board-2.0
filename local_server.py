@@ -12,6 +12,8 @@ ALLOWED_TABLES = {
     "v_daily_summary",
     "v_campaign_funnel",
     "v_geo_summary",
+    "meta_ads_daily",
+    "v_meta_ads_daily_summary",
 }
 
 

@@ -305,7 +305,7 @@ select.page-filter {
     <div class="logo">Sashboard</div>
     <div class="header-right">
       <div class="live-dot" title="Live data"></div>
-      <span class="last-updated" id="last-updated">—</span>
+      <span class="last-updated" id="last-updated">&mdash;</span>
     </div>
   </header>
 
@@ -342,7 +342,7 @@ select.page-filter {
         <option value="">All ad accounts</option>
       </select>
       <button class="report-btn" id="report-btn" onclick="generateReportPdf()" title="Download PDF report">Report PDF</button>
-      <button class="refresh-btn" onclick="refreshActiveView()" title="Refresh data">↻ Refresh</button>
+      <button class="refresh-btn" onclick="refreshActiveView()" title="Refresh data">&#8635; Refresh</button>
     </div>
 
     <div id="web-view">
@@ -352,7 +352,7 @@ select.page-filter {
       <div class="kpi-card"><div class="kpi-label">Page Views</div><div class="kpi-value" id="kpi-pageviews">—</div><div class="kpi-delta neutral" id="kpi-pageviews-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Phone Clicks</div><div class="kpi-value" id="kpi-phone">—</div><div class="kpi-delta neutral" id="kpi-phone-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Total Leads</div><div class="kpi-value" id="kpi-quotes">—</div><div class="kpi-delta neutral" id="kpi-quotes-d"></div></div>
-      <div class="kpi-card"><div class="kpi-label">→ Main Site</div><div class="kpi-value" id="kpi-outbound">—</div><div class="kpi-delta neutral" id="kpi-outbound-d"></div></div>
+      <div class="kpi-card"><div class="kpi-label">&rarr; Main Site</div><div class="kpi-value" id="kpi-outbound">&mdash;</div><div class="kpi-delta neutral" id="kpi-outbound-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Conversion Rate</div><div class="kpi-value" id="kpi-cvr">—</div><div class="kpi-delta neutral" id="kpi-cvr-d"></div></div>
     </div>
 
@@ -449,7 +449,7 @@ select.page-filter {
       </div>
       <div id="map-container">
         <div class="map-placeholder" id="map-placeholder">
-          <div class="map-dots">📍</div>
+          <div class="map-dots">&#128205;</div>
           <div>Interactive map loads after geo data arrives.<br>
           Requires <code>leaflet.js</code> — see instructions in source.</div>
         </div>
