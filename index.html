@@ -1052,19 +1052,28 @@ function renderHeatmap() {
   const desktopPoints = parsedPoints.filter(p => !p.doc_width || p.doc_width >= 1024);
   const points = desktopPoints.length ? desktopPoints : parsedPoints;
   const screenshotUrl = getHeatmapScreenshotUrl(activeSite, heatmapPagePath || '/');
+  const ctx = canvas.getContext('2d');
+
   if (screenshotUrl && screenEl.src !== screenshotUrl) {
+    // New URL — clear stale render and wait for image to load before drawing
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    emptyEl.style.display = 'flex';
+    emptyEl.textContent = 'Loading screenshot…';
     screenEl.src = screenshotUrl;
+    return;
   }
 
-  const width = Math.round(screenEl.clientWidth || canvas.clientWidth || 0);
-  const height = Math.round(screenEl.clientHeight || canvas.clientHeight || 0);
+  // Image hasn't finished loading yet — onload will re-trigger this function
+  if (screenshotUrl && (!screenEl.complete || !screenEl.naturalWidth)) return;
+
+  const width = Math.round(screenEl.clientWidth || 0);
+  const height = Math.round(screenEl.clientHeight || 0);
   if (!width || !height) return;
   contentEl.style.height = `${height}px`;
   canvas.width = width;
   canvas.height = height;
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
-  const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, width, height);
 
   if (!points.length) {
@@ -1077,9 +1086,15 @@ function renderHeatmap() {
   emptyEl.style.display = 'none';
   subEl.textContent = `${points.length.toLocaleString()} tracked clicks in last 24 hours (desktop-aligned)`;
 
+  // naturalHeight is the screenshot's full-page height at the capture viewport (1600px).
+  // Each click was recorded with its own doc_height at the visitor's viewport.
+  // Re-scale y so markers align with the screenshot's actual page height.
+  const naturalH = screenEl.naturalHeight || height;
+
   points.forEach(point => {
     const x = point.x * width;
-    const y = point.y * height;
+    const docH = (point.doc_height && naturalH) ? point.doc_height : naturalH;
+    const y = (point.y * docH / naturalH) * height;
     if (x < 0 || x > width || y < 0 || y > height) return;
     const grad = ctx.createRadialGradient(x, y, 2, x, y, 44);
     grad.addColorStop(0, 'rgba(255, 87, 34, 0.58)');
@@ -1466,6 +1481,8 @@ document.getElementById('heatmap-screenshot').addEventListener('load', () => {
 
 document.getElementById('heatmap-screenshot').addEventListener('error', () => {
   const emptyEl = document.getElementById('heatmap-empty');
+  const canvas = document.getElementById('heatmap-canvas');
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
   emptyEl.style.display = 'flex';
   emptyEl.textContent = 'Could not load screenshot for this page.';
 });
