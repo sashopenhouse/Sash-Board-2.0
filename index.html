@@ -341,6 +341,11 @@ select.page-filter {
       <select class="site-filter" id="meta-account-filter" style="display:none">
         <option value="">All ad accounts</option>
       </select>
+      <select class="site-filter" id="meta-conversion-mode" style="display:none">
+        <option value="meta_leads">Conversion: Meta Leads (strict)</option>
+        <option value="internal_leads">Conversion: Internal Leads (FB UTM)</option>
+        <option value="click_proxy">Conversion: Click Proxy (5%)</option>
+      </select>
       <button class="report-btn" id="report-btn" onclick="generateReportPdf()" title="Download PDF report">Report PDF</button>
       <button class="refresh-btn" onclick="refreshActiveView()" title="Refresh data">&#8635; Refresh</button>
     </div>
@@ -460,6 +465,9 @@ select.page-filter {
     </div>
 
     <div id="meta-view" style="display:none">
+      <div class="meta-helper" id="meta-conversion-help" style="margin-bottom:10px;">
+        Conversion mode: Meta Leads (strict) — uses Meta action-based lead counts imported into meta_ads_daily.
+      </div>
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-label">Spend</div><div class="kpi-value" id="meta-kpi-spend">—</div><div class="kpi-delta neutral">Selected range</div></div>
         <div class="kpi-card"><div class="kpi-label">Impressions</div><div class="kpi-value" id="meta-kpi-impressions">—</div><div class="kpi-delta neutral">Selected range</div></div>
@@ -484,7 +492,7 @@ select.page-filter {
           </div>
           <table class="funnel-table">
             <thead><tr>
-              <th>Campaign</th><th>Spend</th><th>Meta Leads</th><th>Our Leads</th><th>CPL</th><th>ROAS</th><th>CTR</th>
+              <th>Campaign</th><th>Spend</th><th id="meta-conversion-col-head">Meta Leads</th><th>Our Leads</th><th>CPL</th><th>ROAS</th><th>CTR</th>
             </tr></thead>
             <tbody id="meta-campaign-body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody>
           </table>
@@ -523,6 +531,7 @@ const CONFIG = {
 let activeDays = 7;
 let activeSite = '';
 let activeMetaAccount = '';
+let activeMetaConversionMode = 'meta_leads';
 let currentView = 'web';
 let trafficChart = null;
 let metaChart = null;
@@ -811,6 +820,32 @@ function formatDecimal(value, digits = 2) {
   return Number(value || 0).toFixed(digits);
 }
 
+function getMetaModeLabel(mode) {
+  if (mode === 'internal_leads') return 'Internal Leads';
+  if (mode === 'click_proxy') return 'Click Proxy';
+  return 'Meta Leads';
+}
+
+function updateMetaConversionHelp() {
+  const help = document.getElementById('meta-conversion-help');
+  if (!help) return;
+  if (activeMetaConversionMode === 'internal_leads') {
+    help.textContent = 'Conversion mode: Internal Leads — counts tracked quote/form/chat lead events where utm_source=fb.';
+    return;
+  }
+  if (activeMetaConversionMode === 'click_proxy') {
+    help.textContent = 'Conversion mode: Click Proxy — estimates conversions as 5% of Meta clicks for pacing only (not true lead attribution).';
+    return;
+  }
+  help.textContent = 'Conversion mode: Meta Leads (strict) — uses Meta action-based lead counts imported into meta_ads_daily.';
+}
+
+function getMetaConversionCount(metaLeads, internalLeads, clicks) {
+  if (activeMetaConversionMode === 'internal_leads') return internalLeads;
+  if (activeMetaConversionMode === 'click_proxy') return Math.round(clicks * 0.05);
+  return metaLeads;
+}
+
 async function loadMetaKPIs(rows, internalLeads) {
   const totals = rows.reduce((acc, r) => {
     acc.spend += Number(r.spend || 0);
@@ -822,13 +857,15 @@ async function loadMetaKPIs(rows, internalLeads) {
   }, { spend: 0, impressions: 0, clicks: 0, leads: 0, purchase_value: 0 });
 
   const internalLeadCount = internalLeads.length;
-  const cpl = internalLeadCount > 0 ? totals.spend / internalLeadCount : (totals.leads > 0 ? totals.spend / totals.leads : 0);
+  const conversionCount = getMetaConversionCount(totals.leads, internalLeadCount, totals.clicks);
+  const cpl = conversionCount > 0 ? totals.spend / conversionCount : 0;
   const roas = totals.spend > 0 ? totals.purchase_value / totals.spend : 0;
+  const modeLabel = getMetaModeLabel(activeMetaConversionMode);
 
   document.getElementById('meta-kpi-spend').textContent = formatMoney(totals.spend);
   document.getElementById('meta-kpi-impressions').textContent = totals.impressions.toLocaleString();
   document.getElementById('meta-kpi-clicks').textContent = totals.clicks.toLocaleString();
-  document.getElementById('meta-kpi-leads').innerHTML = `${totals.leads.toLocaleString()} <span style="font-size:10px;opacity:0.6;font-weight:400;">(${internalLeadCount} Internal)</span>`;
+  document.getElementById('meta-kpi-leads').innerHTML = `${conversionCount.toLocaleString()} <span style="font-size:10px;opacity:0.6;font-weight:400;">(${modeLabel})</span>`;
   document.getElementById('meta-kpi-cpl').textContent = '$' + formatDecimal(cpl, 2);
   document.getElementById('meta-kpi-roas').textContent = formatDecimal(roas, 2) + 'x';
 }
@@ -837,9 +874,10 @@ async function loadMetaChart(rows, internalLeads) {
   const byDay = {};
   rows.forEach(r => {
     const day = r.day;
-    if (!byDay[day]) byDay[day] = { spend: 0, leads: 0, internalLeads: 0 };
+    if (!byDay[day]) byDay[day] = { spend: 0, leads: 0, clicks: 0, internalLeads: 0 };
     byDay[day].spend += Number(r.spend || 0);
     byDay[day].leads += Number(r.leads || 0);
+    byDay[day].clicks += Number(r.clicks || 0);
   });
   
   internalLeads.forEach(l => {
@@ -855,9 +893,14 @@ async function loadMetaChart(rows, internalLeads) {
     const key = d.toISOString().slice(0, 10);
     labels.push(key.slice(5));
     spendData.push(Number((byDay[key]?.spend || 0).toFixed(2)));
-    leadsData.push(byDay[key]?.leads || 0);
-    internalData.push(byDay[key]?.internalLeads || 0);
+    const metaLeads = byDay[key]?.leads || 0;
+    const clicks = byDay[key]?.clicks || 0;
+    const internalLeadsForDay = byDay[key]?.internalLeads || 0;
+    leadsData.push(getMetaConversionCount(metaLeads, internalLeadsForDay, clicks));
+    internalData.push(internalLeadsForDay);
   }
+
+  document.getElementById('meta-chart-sub').textContent = `Daily spend + ${getMetaModeLabel(activeMetaConversionMode)}`;
 
   const ctx = document.getElementById('meta-chart').getContext('2d');
   if (metaChart) metaChart.destroy();
@@ -878,7 +921,7 @@ async function loadMetaChart(rows, internalLeads) {
         },
         {
           type: 'bar',
-          label: 'Meta Leads',
+          label: getMetaModeLabel(activeMetaConversionMode),
           data: leadsData,
           backgroundColor: 'rgba(148, 163, 184, 0.3)',
           borderColor: 'rgba(148, 163, 184, 0.5)',
@@ -946,14 +989,18 @@ async function loadMetaCampaigns(rows, internalLeads) {
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 20);
 
+  const modeLabel = getMetaModeLabel(activeMetaConversionMode);
+  document.getElementById('meta-conversion-col-head').textContent = modeLabel;
+
   tbody.innerHTML = top.map(c => {
-    const cpl = c.leads > 0 ? c.spend / c.leads : 0;
+    const conversions = getMetaConversionCount(c.leads, c.internalLeads, c.clicks);
+    const cpl = conversions > 0 ? c.spend / conversions : 0;
     const roas = c.spend > 0 ? c.purchase_value / c.spend : 0;
     const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
     return `<tr>
       <td>${c.name}</td>
       <td>${formatMoney(c.spend)}</td>
-      <td>${c.leads.toLocaleString()}</td>
+      <td>${conversions.toLocaleString()} <span style="font-size:10px;opacity:0.6;">(${modeLabel})</span></td>
       <td style="color:#22c55e;font-weight:600;">${c.internalLeads.toLocaleString()}</td>
       <td>$${formatDecimal(cpl, 2)}</td>
       <td>${formatDecimal(roas, 2)}x</td>
@@ -999,8 +1046,10 @@ function setDashboardView(view) {
   document.getElementById('meta-view').style.display = view === 'meta' ? 'block' : 'none';
   document.getElementById('site-filter').style.display = view === 'web' ? '' : 'none';
   document.getElementById('meta-account-filter').style.display = view === 'meta' ? '' : 'none';
+  document.getElementById('meta-conversion-mode').style.display = view === 'meta' ? '' : 'none';
   document.getElementById('report-btn').style.display = view === 'web' ? '' : 'none';
   document.querySelectorAll('.view-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
+  updateMetaConversionHelp();
   refreshActiveView();
 }
 
@@ -1463,6 +1512,12 @@ document.getElementById('site-filter').addEventListener('change', e => {
 
 document.getElementById('meta-account-filter').addEventListener('change', e => {
   activeMetaAccount = e.target.value;
+  if (currentView === 'meta') loadMetaAll();
+});
+
+document.getElementById('meta-conversion-mode').addEventListener('change', e => {
+  activeMetaConversionMode = e.target.value;
+  updateMetaConversionHelp();
   if (currentView === 'meta') loadMetaAll();
 });
 
