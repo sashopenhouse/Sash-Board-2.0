@@ -369,7 +369,7 @@ select.page-filter {
       <div class="kpi-card"><div class="kpi-label">Unique Visitors</div><div class="kpi-value" id="kpi-visitors">—</div><div class="kpi-delta neutral" id="kpi-visitors-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Page Views</div><div class="kpi-value" id="kpi-pageviews">—</div><div class="kpi-delta neutral" id="kpi-pageviews-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Phone Clicks</div><div class="kpi-value" id="kpi-phone">—</div><div class="kpi-delta neutral" id="kpi-phone-d"></div></div>
-      <div class="kpi-card"><div class="kpi-label">Total Leads</div><div class="kpi-value" id="kpi-quotes">—</div><div class="kpi-delta neutral" id="kpi-quotes-d"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Unique Leads</div><div class="kpi-value" id="kpi-quotes">—</div><div class="kpi-delta neutral" id="kpi-quotes-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">&rarr; Main Site</div><div class="kpi-value" id="kpi-outbound">&mdash;</div><div class="kpi-delta neutral" id="kpi-outbound-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Conversion Rate</div><div class="kpi-value" id="kpi-cvr">—</div><div class="kpi-delta neutral" id="kpi-cvr-d"></div></div>
     </div>
@@ -1269,7 +1269,7 @@ async function loadMetaAll() {
     // Fetch both ad platform data and our internal tracked leads
     const [metaRows, internalLeads] = await Promise.all([
       query(getAdSummaryViewName(), `day=gte.${sinceDay}${af}&select=day,campaign_id,campaign_name,spend,impressions,clicks,leads,purchase_value&order=day.asc&limit=50000`),
-      query('events', `ts=gte.${since}&utm_source=eq.${encodeURIComponent(getInternalLeadSource())}&event_type=in.(quote_confirmed,form_submit,chat_lead)&select=id,ts,utm_campaign`)
+      query('events', `ts=gte.${since}&utm_source=eq.${encodeURIComponent(getInternalLeadSource())}&event_type=in.(quote_confirmed,form_submit,chat_lead,bath_quiz_lead)&select=id,ts,utm_campaign`)
     ]);
 
     await ensureAdAccountOptions();
@@ -1529,7 +1529,7 @@ async function loadKPIs() {
   const sf = siteFilter();
 
   // Pull from the daily summary view to avoid row-limit issues with raw events
-  const rows = await query('v_daily_summary', `day=gte.${prevDay}${sf}&select=day,unique_visitors,page_views,phone_clicks,leads,outbound_to_main`);
+  const rows = await query('v_daily_summary', `day=gte.${prevDay}${sf}&select=day,unique_visitors,page_views,phone_clicks,leads,lead_events,outbound_to_main`);
 
   const current  = rows.filter(r => r.day >= sinceDay);
   const previous = rows.filter(r => r.day < sinceDay && r.day >= prevDay);
@@ -1541,6 +1541,7 @@ async function loadKPIs() {
     pageviews: sum(current, 'page_views'),
     phone:    sum(current, 'phone_clicks'),
     quotes:   sum(current, 'leads'),
+    leadEvents: sum(current, 'lead_events'),
     outbound: sum(current, 'outbound_to_main'),
   };
   const prev_stats = {
@@ -1548,6 +1549,7 @@ async function loadKPIs() {
     pageviews: sum(previous, 'page_views'),
     phone:    sum(previous, 'phone_clicks'),
     quotes:   sum(previous, 'leads'),
+    leadEvents: sum(previous, 'lead_events'),
     outbound: sum(previous, 'outbound_to_main'),
   };
 
@@ -1568,6 +1570,12 @@ async function loadKPIs() {
   setKpi('quotes', stats.quotes, prev_stats.quotes);
   setKpi('outbound', stats.outbound, prev_stats.outbound);
   document.getElementById('kpi-cvr').textContent = cvr + '%';
+  const leadDeltaEl = document.getElementById('kpi-quotes-d');
+  if (leadDeltaEl) {
+    const base = leadDeltaEl.textContent || '';
+    const suffix = ` (${stats.leadEvents.toLocaleString()} lead events)`;
+    leadDeltaEl.textContent = (base + suffix).trim();
+  }
 }
 
 // ── Traffic chart ─────────────────────────────────────────────────────────────

@@ -216,6 +216,37 @@
     if (/thank|confirm|success|submitted/i.test(location.pathname + location.search + document.title)) {
       fire('quote_confirmed', { confirmation_url: location.href });
     }
+
+    // Explicit conversion marker for custom confirmation redirects
+    const conversionParam = new URLSearchParams(location.search).get('nys_conversion');
+    if (conversionParam === 'bath_quiz_lead') {
+      fire('bath_quiz_lead', { conversion_url: location.href, source: 'query_param' });
+    }
+  }
+
+  // ── 3b. Bath quiz lead tracking ───────────────────────────────────────────
+  // Catches quiz-style flows that may not fire standard form submit events.
+  function trackBathQuizLeads() {
+    const key = 'nys_bath_quiz_lead_sent';
+
+    document.addEventListener('click', function (e) {
+      const trigger = e.target.closest('[data-nys-bath-quiz-lead], .bath-quiz-submit, #bathQuizSubmit, [data-bath-quiz-submit]');
+      if (!trigger) return;
+      fire('bath_quiz_lead', {
+        source: 'click',
+        element_id: trigger.id || null,
+        element_class: trigger.className || null,
+        element_text: (trigger.innerText || '').trim().slice(0, 120) || null,
+      });
+    });
+
+    const inBathQuizContext = /bath/i.test(location.pathname + location.search + document.title) && /quiz/i.test(location.pathname + location.search + document.title);
+    const looksLikeConfirmation = /thank|confirm|success|submitted|complete|results/i.test(location.pathname + location.search + document.title);
+
+    if (inBathQuizContext && looksLikeConfirmation && sessionStorage.getItem(key) !== '1') {
+      sessionStorage.setItem(key, '1');
+      fire('bath_quiz_lead', { source: 'confirmation_page', conversion_url: location.href });
+    }
   }
 
   // ── 4. Outbound links to newyorksash.com ───────────────────────────────────
@@ -306,6 +337,7 @@
     trackPageView();
     trackPhoneClicks();
     trackFormSubmissions();
+    trackBathQuizLeads();
     trackOutboundLinks();
     trackPrizeWheel();
     trackChatClicks();

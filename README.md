@@ -262,11 +262,20 @@ LIMIT 20;
 | `phone_click` | User clicks a `tel:` link |
 | `form_submit` | Any form is submitted |
 | `quote_confirmed` | Thank-you/confirmation page loads |
+| `bath_quiz_lead` | Bath quiz lead signal captured (submit/confirmation/explicit marker) |
 | `outbound_to_main` | User clicks a link to newyorksash.com from a campaign site |
 | `chat_click` | User clicks a chat button |
 | `prize_wheel_spin` | Spin button clicked |
 | `prize_wheel_claim` | Claim button clicked |
 | `click_map` | Click point captured for daily heatmap hotspots |
+
+---
+
+## Lead counting logic (Website tab)
+
+- `Unique Leads` in the KPI and funnel is deduped by `session_id` (with `visitor_id` fallback), so repeated submits from the same session are not over-counted.
+- Included events: `quote_confirmed`, `form_submit`, `chat_lead`, and `bath_quiz_lead`.
+- Raw lead event volume is still available as `lead_events` in `v_daily_summary` for QA/debugging.
 
 ---
 

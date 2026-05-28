@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS events (
   ts            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   -- Identity
-  event_type    TEXT NOT NULL,           -- page_view | phone_click | form_submit | quote_confirmed | outbound_to_main | prize_wheel_spin | prize_wheel_claim | chat_click
+  event_type    TEXT NOT NULL,           -- page_view | phone_click | form_submit | quote_confirmed | chat_lead | bath_quiz_lead | outbound_to_main | prize_wheel_spin | prize_wheel_claim | chat_click
   site_id       TEXT NOT NULL,           -- newyorksash-main | newyorksashoffers | upstatetoughny | etc.
   visitor_id    TEXT,                    -- persistent per browser
   session_id    TEXT,                    -- resets after 30min inactivity
@@ -74,12 +74,19 @@ SELECT
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'page_view') AS unique_visitors,
   COUNT(*) FILTER (WHERE event_type = 'phone_click')         AS phone_clicks,
   COUNT(*) FILTER (WHERE event_type = 'outbound_to_main')    AS outbound_to_main,
-  -- Combined leads (Quotes + Forms + Chat Leads)
-  COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead')) AS leads,
+  -- Raw lead events (Quotes + Forms + Chat + Bath Quiz Leads)
+  COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead', 'bath_quiz_lead')) AS lead_events,
+  -- Unique leads deduped by session, then visitor fallback (includes chat/bath quiz)
+  COUNT(DISTINCT CASE
+    WHEN event_type IN ('quote_confirmed', 'form_submit', 'chat_lead', 'bath_quiz_lead') THEN
+      COALESCE(NULLIF(session_id, ''), CONCAT('vid:', NULLIF(visitor_id, '')), CONCAT('evt:', id::text))
+    ELSE NULL
+  END) AS leads,
   -- Breakdowns for deep-diving if needed
   COUNT(*) FILTER (WHERE event_type = 'quote_confirmed')     AS quote_confirmations,
   COUNT(*) FILTER (WHERE event_type = 'form_submit')         AS form_submits,
   COUNT(*) FILTER (WHERE event_type = 'chat_lead')          AS chat_leads,
+  COUNT(*) FILTER (WHERE event_type = 'bath_quiz_lead')     AS bath_quiz_leads,
   COUNT(*) FILTER (WHERE event_type = 'chat_click')          AS chat_clicks
 FROM events
 GROUP BY 1, 2
@@ -93,9 +100,18 @@ SELECT
   COUNT(DISTINCT visitor_id)                                         AS total_visitors,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'outbound_to_main') AS clicked_to_main,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'phone_click')      AS phone_contacts,
-  COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead'))  AS quote_conversions,
+  COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead', 'bath_quiz_lead'))  AS quote_conversion_events,
+  COUNT(DISTINCT CASE
+    WHEN event_type IN ('quote_confirmed', 'form_submit', 'chat_lead', 'bath_quiz_lead') THEN
+      COALESCE(NULLIF(session_id, ''), CONCAT('vid:', NULLIF(visitor_id, '')), CONCAT('evt:', id::text))
+    ELSE NULL
+  END) AS quote_conversions,
   ROUND(
-    100.0 * COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead'))
+    100.0 * COUNT(DISTINCT CASE
+      WHEN event_type IN ('quote_confirmed', 'form_submit', 'chat_lead', 'bath_quiz_lead') THEN
+        COALESCE(NULLIF(session_id, ''), CONCAT('vid:', NULLIF(visitor_id, '')), CONCAT('evt:', id::text))
+      ELSE NULL
+    END)
     / NULLIF(COUNT(DISTINCT visitor_id), 0), 2
   )                                                                          AS conversion_rate_pct
 FROM events
