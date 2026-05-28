@@ -21,7 +21,11 @@ export default async function handler(req, res) {
     'v_campaign_funnel',
     'v_geo_summary',
     'meta_ads_daily',
-    'v_meta_ads_daily_summary'
+    'v_meta_ads_daily_summary',
+    'tiktok_ads_daily',
+    'v_tiktok_ads_daily_summary',
+    'social_posts_daily',
+    'v_social_posts_daily_summary'
   ]);
 
   if (!table || !allowedTables.has(table)) {

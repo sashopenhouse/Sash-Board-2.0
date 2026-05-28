@@ -158,6 +158,95 @@ SELECT
 FROM public.meta_ads_daily
 GROUP BY 1,2,3,4,5;
 
+-- TikTok ads daily import table
+CREATE TABLE IF NOT EXISTS public.tiktok_ads_daily (
+  id bigserial primary key,
+  date date not null,
+  account_id text,
+  account_name text,
+  campaign_id text,
+  campaign_name text,
+  adset_id text,
+  adset_name text,
+  ad_id text,
+  ad_name text,
+  spend numeric(12,2) default 0,
+  impressions int default 0,
+  clicks int default 0,
+  leads int default 0,
+  purchase_value numeric(12,2) default 0,
+  created_at timestamptz default now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tiktok_ads_daily_date ON public.tiktok_ads_daily(date);
+CREATE INDEX IF NOT EXISTS idx_tiktok_ads_daily_account ON public.tiktok_ads_daily(account_id);
+CREATE INDEX IF NOT EXISTS idx_tiktok_ads_daily_campaign ON public.tiktok_ads_daily(campaign_id);
+
+DROP VIEW IF EXISTS public.v_tiktok_ads_daily_summary CASCADE;
+CREATE OR REPLACE VIEW public.v_tiktok_ads_daily_summary AS
+SELECT
+  date AS day,
+  account_id,
+  account_name,
+  campaign_id,
+  campaign_name,
+  SUM(COALESCE(spend, 0))::numeric(12,2) AS spend,
+  SUM(COALESCE(impressions, 0))::bigint AS impressions,
+  SUM(COALESCE(clicks, 0))::bigint AS clicks,
+  SUM(COALESCE(leads, 0))::bigint AS leads,
+  SUM(COALESCE(purchase_value, 0))::numeric(12,2) AS purchase_value
+FROM public.tiktok_ads_daily
+GROUP BY 1,2,3,4,5;
+
+-- Social posts daily snapshot table (organic/non-ad content)
+CREATE TABLE IF NOT EXISTS public.social_posts_daily (
+  id bigserial primary key,
+  day date not null,
+  platform text not null,
+  account_id text,
+  account_name text,
+  post_id text not null,
+  post_url text,
+  post_text text,
+  post_type text,
+  published_at timestamptz,
+  impressions bigint default 0,
+  reach bigint default 0,
+  video_views bigint default 0,
+  clicks bigint default 0,
+  likes bigint default 0,
+  comments bigint default 0,
+  shares bigint default 0,
+  saves bigint default 0,
+  engagements bigint default 0,
+  created_at timestamptz default now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_social_posts_daily_day_platform_post
+  ON public.social_posts_daily(day, platform, post_id);
+CREATE INDEX IF NOT EXISTS idx_social_posts_daily_day ON public.social_posts_daily(day);
+CREATE INDEX IF NOT EXISTS idx_social_posts_daily_platform ON public.social_posts_daily(platform);
+CREATE INDEX IF NOT EXISTS idx_social_posts_daily_account ON public.social_posts_daily(account_id);
+
+DROP VIEW IF EXISTS public.v_social_posts_daily_summary CASCADE;
+CREATE OR REPLACE VIEW public.v_social_posts_daily_summary AS
+SELECT
+  day,
+  platform,
+  account_id,
+  account_name,
+  SUM(COALESCE(impressions, 0))::bigint AS impressions,
+  SUM(COALESCE(reach, 0))::bigint AS reach,
+  SUM(COALESCE(video_views, 0))::bigint AS video_views,
+  SUM(COALESCE(clicks, 0))::bigint AS clicks,
+  SUM(COALESCE(likes, 0))::bigint AS likes,
+  SUM(COALESCE(comments, 0))::bigint AS comments,
+  SUM(COALESCE(shares, 0))::bigint AS shares,
+  SUM(COALESCE(saves, 0))::bigint AS saves,
+  SUM(COALESCE(engagements, 0))::bigint AS engagements
+FROM public.social_posts_daily
+GROUP BY 1,2,3,4;
+
 -- Allow anonymous INSERT (the tracker fires without login)
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 DO $$

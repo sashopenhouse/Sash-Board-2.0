@@ -322,6 +322,7 @@ select.page-filter {
       <div class="view-tabs">
         <button class="view-tab active" data-view="web">Website</button>
         <button class="view-tab" data-view="meta">Meta Ads</button>
+        <button class="view-tab" data-view="posts">Posts</button>
       </div>
       <div class="range-pills">
         <button class="pill active" data-days="7">7d</button>
@@ -341,10 +342,22 @@ select.page-filter {
       <select class="site-filter" id="meta-account-filter" style="display:none">
         <option value="">All ad accounts</option>
       </select>
+      <select class="site-filter" id="ad-platform-filter" style="display:none">
+        <option value="meta">Meta</option>
+        <option value="tiktok">TikTok</option>
+      </select>
       <select class="site-filter" id="meta-conversion-mode" style="display:none">
-        <option value="meta_leads">Conversion: Meta Leads (strict)</option>
-        <option value="internal_leads">Conversion: Internal Leads (FB UTM)</option>
+        <option value="meta_leads">Conversion: Platform Leads (strict)</option>
+        <option value="internal_leads">Conversion: Internal Leads (UTM source)</option>
         <option value="click_proxy">Conversion: Click Proxy (5%)</option>
+      </select>
+      <select class="site-filter" id="post-platform-filter" style="display:none">
+        <option value="">All platforms</option>
+        <option value="meta">Meta</option>
+        <option value="tiktok">TikTok</option>
+      </select>
+      <select class="site-filter" id="post-account-filter" style="display:none">
+        <option value="">All post accounts</option>
       </select>
       <button class="report-btn" id="report-btn" onclick="generateReportPdf()" title="Download PDF report">Report PDF</button>
       <button class="refresh-btn" onclick="refreshActiveView()" title="Refresh data">&#8635; Refresh</button>
@@ -466,7 +479,7 @@ select.page-filter {
 
     <div id="meta-view" style="display:none">
       <div class="meta-helper" id="meta-conversion-help" style="margin-bottom:10px;">
-        Conversion mode: Meta Leads (strict) — uses Meta action-based lead counts imported into meta_ads_daily.
+        Conversion mode: Platform Leads (strict) — uses imported platform lead counts.
       </div>
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-label">Spend</div><div class="kpi-value" id="meta-kpi-spend">—</div><div class="kpi-delta neutral">Selected range</div></div>
@@ -480,14 +493,14 @@ select.page-filter {
       <div class="two-col">
         <div class="panel">
           <div class="panel-header">
-            <span class="panel-title">Meta spend over time</span>
+            <span class="panel-title" id="meta-chart-title">Ad spend over time</span>
             <span class="panel-sub" id="meta-chart-sub">Daily spend</span>
           </div>
           <canvas id="meta-chart" height="200"></canvas>
         </div>
         <div class="panel">
           <div class="panel-header">
-            <span class="panel-title">Top campaigns</span>
+            <span class="panel-title" id="meta-campaign-title">Top campaigns</span>
             <span class="panel-sub">By spend (selected range)</span>
           </div>
           <table class="funnel-table">
@@ -501,11 +514,48 @@ select.page-filter {
 
       <div class="panel">
         <div class="panel-header">
-          <span class="panel-title">Meta data source</span>
-          <span class="panel-sub">Supabase table: meta_ads_daily</span>
+          <span class="panel-title" id="meta-source-title">Ad data source</span>
+          <span class="panel-sub" id="meta-source-sub">Supabase table: meta_ads_daily</span>
         </div>
-        <div class="meta-helper">
+        <div class="meta-helper" id="meta-source-help">
           Import your daily Meta export into <strong>meta_ads_daily</strong>. This view uses <strong>v_meta_ads_daily_summary</strong> for charting and KPIs.
+        </div>
+      </div>
+    </div>
+
+    <div id="posts-view" style="display:none">
+      <div class="meta-helper" id="posts-help" style="margin-bottom:10px;">
+        Organic post performance for selected range.
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-label">Impressions</div><div class="kpi-value" id="posts-kpi-impressions">—</div><div class="kpi-delta neutral">Selected range</div></div>
+        <div class="kpi-card"><div class="kpi-label">Reach</div><div class="kpi-value" id="posts-kpi-reach">—</div><div class="kpi-delta neutral">Selected range</div></div>
+        <div class="kpi-card"><div class="kpi-label">Engagements</div><div class="kpi-value" id="posts-kpi-engagements">—</div><div class="kpi-delta neutral">Selected range</div></div>
+        <div class="kpi-card"><div class="kpi-label">Engagement Rate</div><div class="kpi-value" id="posts-kpi-er">—</div><div class="kpi-delta neutral">Engagements / Impressions</div></div>
+        <div class="kpi-card"><div class="kpi-label">Video Views</div><div class="kpi-value" id="posts-kpi-video-views">—</div><div class="kpi-delta neutral">Selected range</div></div>
+        <div class="kpi-card"><div class="kpi-label">Post Clicks</div><div class="kpi-value" id="posts-kpi-clicks">—</div><div class="kpi-delta neutral">Selected range</div></div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Post performance over time</span>
+            <span class="panel-sub" id="posts-chart-sub">Daily impressions + engagements</span>
+          </div>
+          <canvas id="posts-chart" height="200"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Top posts</span>
+            <span class="panel-sub">By engagements (selected range)</span>
+          </div>
+          <table class="funnel-table">
+            <thead><tr>
+              <th>Post</th><th>Platform</th><th>Impressions</th><th>Engagements</th><th>ER</th><th>Clicks</th>
+            </tr></thead>
+            <tbody id="posts-top-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -532,9 +582,13 @@ let activeDays = 7;
 let activeSite = '';
 let activeMetaAccount = '';
 let activeMetaConversionMode = 'meta_leads';
+let activeAdPlatform = 'meta';
+let activePostPlatform = '';
+let activePostAccount = '';
 let currentView = 'web';
 let trafficChart = null;
 let metaChart = null;
+let postsChart = null;
 let heatmapRows = [];
 let heatmapPagePath = '';
 let refreshInterval = null;
@@ -604,6 +658,30 @@ function siteFilter() {
 
 function metaAccountFilter() {
   return activeMetaAccount ? `&account_id=eq.${encodeURIComponent(activeMetaAccount)}` : '';
+}
+
+function postPlatformFilter() {
+  return activePostPlatform ? `&platform=eq.${encodeURIComponent(activePostPlatform)}` : '';
+}
+
+function postAccountFilter() {
+  return activePostAccount ? `&account_id=eq.${encodeURIComponent(activePostAccount)}` : '';
+}
+
+function getAdPlatformLabel() {
+  return activeAdPlatform === 'tiktok' ? 'TikTok' : 'Meta';
+}
+
+function getAdTableName() {
+  return activeAdPlatform === 'tiktok' ? 'tiktok_ads_daily' : 'meta_ads_daily';
+}
+
+function getAdSummaryViewName() {
+  return activeAdPlatform === 'tiktok' ? 'v_tiktok_ads_daily_summary' : 'v_meta_ads_daily_summary';
+}
+
+function getInternalLeadSource() {
+  return activeAdPlatform === 'tiktok' ? 'tiktok' : 'fb';
 }
 
 function normalizeReferrer(ref) {
@@ -795,10 +873,10 @@ async function loadAll() {
   }
 }
 
-async function ensureMetaAccountOptions() {
+async function ensureAdAccountOptions() {
   const select = document.getElementById('meta-account-filter');
   const since = dateFrom(90).slice(0, 10);
-  const rows = await query('meta_ads_daily', `date=gte.${since}&select=account_id,account_name&order=date.desc&limit=50000`);
+  const rows = await query(getAdTableName(), `date=gte.${since}&select=account_id,account_name&order=date.desc&limit=50000`);
   const seen = new Map();
   rows.forEach(r => {
     if (!r.account_id) return;
@@ -807,6 +885,24 @@ async function ensureMetaAccountOptions() {
   const options = ['<option value="">All ad accounts</option>'];
   Array.from(seen.entries()).forEach(([id, name]) => {
     const selected = id === activeMetaAccount ? 'selected' : '';
+    options.push(`<option value="${id}" ${selected}>${name}</option>`);
+  });
+  select.innerHTML = options.join('');
+}
+
+async function ensurePostAccountOptions() {
+  const select = document.getElementById('post-account-filter');
+  const since = dateFrom(90).slice(0, 10);
+  const pf = postPlatformFilter();
+  const rows = await query('social_posts_daily', `day=gte.${since}${pf}&select=account_id,account_name&order=day.desc&limit=50000`);
+  const seen = new Map();
+  rows.forEach(r => {
+    if (!r.account_id) return;
+    if (!seen.has(r.account_id)) seen.set(r.account_id, r.account_name || r.account_id);
+  });
+  const options = ['<option value="">All post accounts</option>'];
+  Array.from(seen.entries()).forEach(([id, name]) => {
+    const selected = id === activePostAccount ? 'selected' : '';
     options.push(`<option value="${id}" ${selected}>${name}</option>`);
   });
   select.innerHTML = options.join('');
@@ -823,27 +919,179 @@ function formatDecimal(value, digits = 2) {
 function getMetaModeLabel(mode) {
   if (mode === 'internal_leads') return 'Internal Leads';
   if (mode === 'click_proxy') return 'Click Proxy';
-  return 'Meta Leads';
+  return getAdPlatformLabel() + ' Leads';
 }
 
 function updateMetaConversionHelp() {
   const help = document.getElementById('meta-conversion-help');
   if (!help) return;
+  const platform = getAdPlatformLabel();
+  const source = getInternalLeadSource();
   if (activeMetaConversionMode === 'internal_leads') {
-    help.textContent = 'Conversion mode: Internal Leads — counts tracked quote/form/chat lead events where utm_source=fb.';
+    help.textContent = `Conversion mode: Internal Leads — counts tracked quote/form/chat lead events where utm_source=${source}.`;
     return;
   }
   if (activeMetaConversionMode === 'click_proxy') {
-    help.textContent = 'Conversion mode: Click Proxy — estimates conversions as 5% of Meta clicks for pacing only (not true lead attribution).';
+    help.textContent = `Conversion mode: Click Proxy — estimates conversions as 5% of ${platform} clicks for pacing only (not true lead attribution).`;
     return;
   }
-  help.textContent = 'Conversion mode: Meta Leads (strict) — uses Meta action-based lead counts imported into meta_ads_daily.';
+  help.textContent = `Conversion mode: ${platform} Leads (strict) — uses imported ${platform} lead counts from ${getAdTableName()}.`;
+}
+
+function updateAdSourceCopy() {
+  const platform = getAdPlatformLabel();
+  const tableName = getAdTableName();
+  const viewName = getAdSummaryViewName();
+  const chartTitle = document.getElementById('meta-chart-title');
+  const campaignTitle = document.getElementById('meta-campaign-title');
+  const sourceTitle = document.getElementById('meta-source-title');
+  const sourceSub = document.getElementById('meta-source-sub');
+  const sourceHelp = document.getElementById('meta-source-help');
+  if (chartTitle) chartTitle.textContent = `${platform} spend over time`;
+  if (campaignTitle) campaignTitle.textContent = `${platform} top campaigns`;
+  if (sourceTitle) sourceTitle.textContent = `${platform} data source`;
+  if (sourceSub) sourceSub.textContent = `Supabase table: ${tableName}`;
+  if (sourceHelp) {
+    sourceHelp.innerHTML = `Import your daily ${platform} export into <strong>${tableName}</strong>. This view uses <strong>${viewName}</strong> for charting and KPIs.`;
+  }
 }
 
 function getMetaConversionCount(metaLeads, internalLeads, clicks) {
   if (activeMetaConversionMode === 'internal_leads') return internalLeads;
   if (activeMetaConversionMode === 'click_proxy') return Math.round(clicks * 0.05);
   return metaLeads;
+}
+
+function loadPostsKPIs(rows) {
+  const totals = rows.reduce((acc, r) => {
+    acc.impressions += Number(r.impressions || 0);
+    acc.reach += Number(r.reach || 0);
+    acc.video_views += Number(r.video_views || 0);
+    acc.clicks += Number(r.clicks || 0);
+    acc.engagements += Number(r.engagements || 0);
+    return acc;
+  }, { impressions: 0, reach: 0, video_views: 0, clicks: 0, engagements: 0 });
+
+  const er = totals.impressions > 0 ? (totals.engagements / totals.impressions) * 100 : 0;
+
+  document.getElementById('posts-kpi-impressions').textContent = totals.impressions.toLocaleString();
+  document.getElementById('posts-kpi-reach').textContent = totals.reach.toLocaleString();
+  document.getElementById('posts-kpi-engagements').textContent = totals.engagements.toLocaleString();
+  document.getElementById('posts-kpi-er').textContent = formatDecimal(er, 2) + '%';
+  document.getElementById('posts-kpi-video-views').textContent = totals.video_views.toLocaleString();
+  document.getElementById('posts-kpi-clicks').textContent = totals.clicks.toLocaleString();
+
+  const platformLabel = activePostPlatform ? activePostPlatform.toUpperCase() : 'ALL PLATFORMS';
+  document.getElementById('posts-help').textContent = `Organic post performance for selected range (${platformLabel}).`;
+}
+
+function loadPostsChart(rows) {
+  const byDay = {};
+  rows.forEach(r => {
+    if (!byDay[r.day]) byDay[r.day] = { impressions: 0, engagements: 0 };
+    byDay[r.day].impressions += Number(r.impressions || 0);
+    byDay[r.day].engagements += Number(r.engagements || 0);
+  });
+
+  const labels = [];
+  const impressionsData = [];
+  const engagementData = [];
+  for (let i = activeDays - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    labels.push(key.slice(5));
+    impressionsData.push(byDay[key]?.impressions || 0);
+    engagementData.push(byDay[key]?.engagements || 0);
+  }
+
+  const ctx = document.getElementById('posts-chart').getContext('2d');
+  if (postsChart) postsChart.destroy();
+  postsChart = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'line',
+          label: 'Impressions',
+          data: impressionsData,
+          borderColor: '#e8392a',
+          backgroundColor: 'rgba(232,57,42,0.08)',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.3,
+          yAxisID: 'yImpressions'
+        },
+        {
+          type: 'bar',
+          label: 'Engagements',
+          data: engagementData,
+          backgroundColor: 'rgba(34, 197, 94, 0.35)',
+          borderColor: 'rgba(34, 197, 94, 0.55)',
+          borderWidth: 1,
+          yAxisID: 'yEngagements'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: 'rgba(240,238,232,0.65)' } } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(240,238,232,0.45)', font: { family: 'DM Mono', size: 10 } } },
+        yImpressions: { position: 'left', grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(240,238,232,0.45)' } },
+        yEngagements: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: 'rgba(240,238,232,0.45)' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function loadTopPosts(rows) {
+  const tbody = document.getElementById('posts-top-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">No post rows in selected range</td></tr>';
+    return;
+  }
+
+  const byPost = {};
+  rows.forEach(r => {
+    const key = `${r.platform || 'unknown'}:${r.post_id || 'unknown'}`;
+    if (!byPost[key]) {
+      byPost[key] = {
+        platform: r.platform || 'unknown',
+        post_id: r.post_id || null,
+        post_url: r.post_url || null,
+        post_text: r.post_text || r.post_id || 'Untitled post',
+        impressions: 0,
+        engagements: 0,
+        clicks: 0,
+      };
+    }
+    byPost[key].impressions += Number(r.impressions || 0);
+    byPost[key].engagements += Number(r.engagements || 0);
+    byPost[key].clicks += Number(r.clicks || 0);
+    if (r.post_text && !byPost[key].post_text) byPost[key].post_text = r.post_text;
+    if (r.post_url && !byPost[key].post_url) byPost[key].post_url = r.post_url;
+  });
+
+  const top = Object.values(byPost)
+    .sort((a, b) => b.engagements - a.engagements)
+    .slice(0, 20);
+
+  tbody.innerHTML = top.map((p) => {
+    const er = p.impressions > 0 ? (p.engagements / p.impressions) * 100 : 0;
+    const text = String(p.post_text || 'Untitled post').replace(/</g, '&lt;').replace(/>/g, '&gt;').slice(0, 80);
+    const postLabel = p.post_url
+      ? `<a href="${p.post_url}" target="_blank" rel="noopener" style="color:var(--white);text-decoration:underline;">${text}</a>`
+      : text;
+    return `<tr>
+      <td>${postLabel}</td>
+      <td>${(p.platform || '').toUpperCase()}</td>
+      <td>${p.impressions.toLocaleString()}</td>
+      <td>${p.engagements.toLocaleString()}</td>
+      <td>${formatDecimal(er, 2)}%</td>
+      <td>${p.clicks.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
 }
 
 async function loadMetaKPIs(rows, internalLeads) {
@@ -1013,17 +1261,18 @@ async function loadMetaAll() {
   if (currentView !== 'meta') return;
   document.getElementById('last-updated').textContent = 'Refreshing…';
   try {
+    updateAdSourceCopy();
     const since = dateFrom(activeDays);
     const sinceDay = since.slice(0, 10);
     const af = metaAccountFilter();
 
-    // Fetch both Meta API data and our Internal UTM data
+    // Fetch both ad platform data and our internal tracked leads
     const [metaRows, internalLeads] = await Promise.all([
-      query('v_meta_ads_daily_summary', `day=gte.${sinceDay}${af}&select=day,campaign_id,campaign_name,spend,impressions,clicks,leads,purchase_value&order=day.asc&limit=50000`),
-      query('events', `ts=gte.${since}&utm_source=eq.fb&event_type=in.(quote_confirmed,form_submit,chat_lead)&select=id,ts,utm_campaign`)
+      query(getAdSummaryViewName(), `day=gte.${sinceDay}${af}&select=day,campaign_id,campaign_name,spend,impressions,clicks,leads,purchase_value&order=day.asc&limit=50000`),
+      query('events', `ts=gte.${since}&utm_source=eq.${encodeURIComponent(getInternalLeadSource())}&event_type=in.(quote_confirmed,form_submit,chat_lead)&select=id,ts,utm_campaign`)
     ]);
 
-    await ensureMetaAccountOptions();
+    await ensureAdAccountOptions();
     loadMetaKPIs(metaRows, internalLeads);
     loadMetaChart(metaRows, internalLeads);
     loadMetaCampaigns(metaRows, internalLeads);
@@ -1035,8 +1284,34 @@ async function loadMetaAll() {
   }
 }
 
+async function loadPostsAll() {
+  if (currentView !== 'posts') return;
+  document.getElementById('last-updated').textContent = 'Refreshing…';
+  try {
+    const since = dateFrom(activeDays).slice(0, 10);
+    const pf = postPlatformFilter();
+    const af = postAccountFilter();
+
+    await ensurePostAccountOptions();
+    const rows = await query(
+      'social_posts_daily',
+      `day=gte.${since}${pf}${af}&select=day,platform,post_id,post_url,post_text,impressions,reach,video_views,clicks,engagements&order=day.asc&limit=50000`
+    );
+
+    loadPostsKPIs(rows);
+    loadPostsChart(rows);
+    loadTopPosts(rows);
+
+    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('last-updated').textContent = 'Error — check post tracking setup';
+    console.error(e);
+  }
+}
+
 function refreshActiveView() {
   if (currentView === 'meta') return loadMetaAll();
+  if (currentView === 'posts') return loadPostsAll();
   return loadAll();
 }
 
@@ -1044,9 +1319,13 @@ function setDashboardView(view) {
   currentView = view;
   document.getElementById('web-view').style.display = view === 'web' ? 'block' : 'none';
   document.getElementById('meta-view').style.display = view === 'meta' ? 'block' : 'none';
+  document.getElementById('posts-view').style.display = view === 'posts' ? 'block' : 'none';
   document.getElementById('site-filter').style.display = view === 'web' ? '' : 'none';
   document.getElementById('meta-account-filter').style.display = view === 'meta' ? '' : 'none';
+  document.getElementById('ad-platform-filter').style.display = view === 'meta' ? '' : 'none';
   document.getElementById('meta-conversion-mode').style.display = view === 'meta' ? '' : 'none';
+  document.getElementById('post-platform-filter').style.display = view === 'posts' ? '' : 'none';
+  document.getElementById('post-account-filter').style.display = view === 'posts' ? '' : 'none';
   document.getElementById('report-btn').style.display = view === 'web' ? '' : 'none';
   document.querySelectorAll('.view-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
   updateMetaConversionHelp();
@@ -1513,6 +1792,27 @@ document.getElementById('site-filter').addEventListener('change', e => {
 document.getElementById('meta-account-filter').addEventListener('change', e => {
   activeMetaAccount = e.target.value;
   if (currentView === 'meta') loadMetaAll();
+});
+
+document.getElementById('ad-platform-filter').addEventListener('change', e => {
+  activeAdPlatform = e.target.value;
+  activeMetaAccount = '';
+  document.getElementById('meta-account-filter').value = '';
+  updateMetaConversionHelp();
+  updateAdSourceCopy();
+  if (currentView === 'meta') loadMetaAll();
+});
+
+document.getElementById('post-platform-filter').addEventListener('change', e => {
+  activePostPlatform = e.target.value;
+  activePostAccount = '';
+  document.getElementById('post-account-filter').value = '';
+  if (currentView === 'posts') loadPostsAll();
+});
+
+document.getElementById('post-account-filter').addEventListener('change', e => {
+  activePostAccount = e.target.value;
+  if (currentView === 'posts') loadPostsAll();
 });
 
 document.getElementById('meta-conversion-mode').addEventListener('change', e => {

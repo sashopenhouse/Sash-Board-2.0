@@ -139,15 +139,17 @@ HOST=127.0.0.1
 - Open a tracked page with `?nys_debug=1` (or run `localStorage.setItem('nys_debug','1')` in DevTools), then click around and watch Console for `[nys-track]` errors.
 - Tracking is intentionally blocked only on local/dev hosts (`localhost`, `127.0.0.1`, and `sash-board-2-0.vercel.app`). If your production site runs on a different host, it should still track.
 
-## Meta Ads view setup
+## Paid Ads view setup (Meta + TikTok)
 
-The dashboard now includes a separate **Meta Ads** tab.
+The dashboard includes a separate **Meta Ads** tab with a platform switcher for **Meta** and **TikTok**.
 
-1. Re-run `supabase-schema.sql` in Supabase SQL Editor (it adds `meta_ads_daily` and `v_meta_ads_daily_summary`)
-2. Import your Meta daily export into `meta_ads_daily`
-3. Open dashboard and switch to **Meta Ads** tab
+1. Re-run `supabase-schema.sql` in Supabase SQL Editor.
+2. Import platform daily exports:
+  - Meta into `meta_ads_daily`
+  - TikTok into `tiktok_ads_daily`
+3. Open dashboard, switch to **Meta Ads**, then choose platform (Meta or TikTok).
 
-Required columns for `meta_ads_daily` imports:
+Required columns for both ads tables (`meta_ads_daily`, `tiktok_ads_daily`) imports:
 
 - `date` (date)
 - `account_id`, `account_name`
@@ -158,12 +160,88 @@ Optional columns:
 
 - `adset_id`, `adset_name`, `ad_id`, `ad_name`
 
-If the Meta tab shows no rows, verify data exists:
+If the ads tab shows no rows, verify data exists:
 
 ```sql
 SELECT date, account_name, campaign_name, spend, impressions, clicks, leads, purchase_value
 FROM meta_ads_daily
 ORDER BY date DESC
+LIMIT 20;
+```
+
+For TikTok:
+
+```sql
+SELECT date, account_name, campaign_name, spend, impressions, clicks, leads, purchase_value
+FROM tiktok_ads_daily
+ORDER BY date DESC
+LIMIT 20;
+```
+
+### Import scripts
+
+Run Meta importer:
+
+```bash
+node scripts/import-meta-ads.js --days 7
+```
+
+Run TikTok importer:
+
+```bash
+node scripts/import-tiktok-ads.js --days 7
+```
+
+## Posts view setup (organic content)
+
+The dashboard now includes a **Posts** tab for non-ad content performance.
+
+1. Re-run `supabase-schema.sql` in Supabase SQL Editor (adds `social_posts_daily` and `v_social_posts_daily_summary`).
+2. Import post metrics from one of the supported methods below.
+3. Open dashboard and switch to **Posts**.
+
+### Method A: Meta Page posts API import
+
+Set env vars:
+
+- `FB_ACCESS_TOKEN`
+- `FB_PAGE_ID`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+
+Optional:
+
+- `FB_PAGE_NAME`
+
+Run importer:
+
+```bash
+npm run import:meta-posts -- --days 30
+```
+
+### Method B: CSV import (Meta/TikTok/any platform)
+
+Run importer:
+
+```bash
+npm run import:posts-csv -- --file ./path/to/posts.csv --platform tiktok --day 2026-05-28
+```
+
+CSV columns supported (flexible names):
+
+- Required: `post_id`
+- Recommended: `platform`, `account_id`, `account_name`, `post_url`, `post_text`, `post_type`, `published_at`
+- Metrics: `impressions`, `reach`, `video_views`, `clicks`, `likes`, `comments`, `shares`, `saves`, `engagements`
+- Snapshot date: `day` (or `date`, `snapshot_day`)
+
+If `engagements` is missing, it is computed as `likes + comments + shares + saves`.
+
+Verify post rows:
+
+```sql
+SELECT day, platform, account_name, post_id, impressions, engagements
+FROM social_posts_daily
+ORDER BY day DESC
 LIMIT 20;
 ```
 

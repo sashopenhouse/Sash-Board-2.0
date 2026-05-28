@@ -1,4 +1,10 @@
 {
+  "scripts": {
+    "import:meta": "node scripts/import-meta-ads.js",
+    "import:tiktok": "node scripts/import-tiktok-ads.js",
+    "import:meta-posts": "node scripts/import-meta-posts.js",
+    "import:posts-csv": "node scripts/import-social-posts-csv.js"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.1",
     "dotenv": "^17.4.2",
