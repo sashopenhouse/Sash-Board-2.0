@@ -263,7 +263,6 @@ LIMIT 20;
 | `form_submit` | Any form is submitted |
 | `quote_confirmed` | Thank-you/confirmation page loads |
 | `bath_quiz_lead` | Bath quiz lead signal captured (submit/confirmation/explicit marker) |
-| `outbound_to_main` | User clicks a link to newyorksash.com from a campaign site |
 | `chat_click` | User clicks a chat button |
 | `prize_wheel_spin` | Spin button clicked |
 | `prize_wheel_claim` | Claim button clicked |

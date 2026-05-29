@@ -249,35 +249,7 @@
     }
   }
 
-  // ── 4. Outbound links to newyorksash.com ───────────────────────────────────
-  function trackOutboundLinks() {
-    document.addEventListener('click', function (e) {
-      const a = e.target.closest('a[href]');
-      if (!a) return;
-      const href = a.href || '';
-      const currentSite = getSiteId();
-      
-      // 1. External campaign domain -> main site
-      const isMainSiteLink = /newyorksash\.com/i.test(href);
-      const isMainSiteNow  = currentSite === 'newyorksash-main';
-      
-      if (isMainSiteLink && !isMainSiteNow) {
-        // If we are on the main domain but in a sub-folder campaign (e.g. /energy-efficient/)
-        // and we click a link that goes to the root (/) or a non-campaign page, count it.
-        const targetPath = new URL(a.href, location.origin).pathname;
-        const currentPath = location.pathname;
-        
-        const isHeadingToHome = targetPath === '/' || targetPath === '/index.html';
-        const isStayingInCampaign = targetPath.includes('energy-efficient') || targetPath.includes('bathroom-promo');
-        
-        if (isHeadingToHome || !isStayingInCampaign) {
-          fire('outbound_to_main', { destination_url: href, link_text: a.innerText.trim().slice(0, 100) });
-        }
-      }
-    });
-  }
-
-  // ── 5. Prize wheel interactions (campaign-specific) ─────────────────────────
+  // ── 4. Prize wheel interactions (campaign-specific) ─────────────────────────
   // Fires when spin/claim buttons are clicked — harmless no-op on sites without them
   function trackPrizeWheel() {
     document.addEventListener('click', function (e) {
@@ -288,7 +260,7 @@
     });
   }
 
-  // ── 6. Chat button clicks ───────────────────────────────────────────────────
+  // ── 5. Chat button clicks ───────────────────────────────────────────────────
   function trackChatClicks() {
     document.addEventListener('click', function (e) {
       const el = e.target.closest('[data-nys-chat], .chat-btn, .live-chat, #chatBtn, [class*="chat-widget"]');
@@ -297,7 +269,7 @@
     });
   }
 
-  // ── 7. Click heatmap points ─────────────────────────────────────────────────
+  // ── 6. Click heatmap points ─────────────────────────────────────────────────
   // Stores normalized click coordinates in link_text so dashboard can render hotspots
   let lastHeatTs = 0;
   function trackClickHeatmap() {
@@ -338,7 +310,6 @@
     trackPhoneClicks();
     trackFormSubmissions();
     trackBathQuizLeads();
-    trackOutboundLinks();
     trackPrizeWheel();
     trackChatClicks();
     trackClickHeatmap();

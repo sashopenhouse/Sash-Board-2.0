@@ -192,7 +192,6 @@ select.site-filter:focus { border-color: var(--border-hi); }
 .ev-phone_click     { background: rgba(34,197,94,0.15);  color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
 .ev-form_submit     { background: rgba(232,57,42,0.15);  color: #fca5a5; border: 1px solid rgba(232,57,42,0.25); }
 .ev-quote_confirmed { background: rgba(232,57,42,0.3);   color: #f87171; border: 1px solid rgba(232,57,42,0.5); font-weight: 500; }
-.ev-outbound_to_main{ background: rgba(168,85,247,0.15); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.25); }
 .ev-chat_click      { background: rgba(251,191,36,0.15); color: #fde68a; border: 1px solid rgba(251,191,36,0.25); }
 .ev-prize_wheel_spin{ background: rgba(251,146,60,0.15); color: #fdba74; border: 1px solid rgba(251,146,60,0.25); }
 .ev-default         { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
@@ -370,7 +369,6 @@ select.page-filter {
       <div class="kpi-card"><div class="kpi-label">Page Views</div><div class="kpi-value" id="kpi-pageviews">—</div><div class="kpi-delta neutral" id="kpi-pageviews-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Phone Clicks</div><div class="kpi-value" id="kpi-phone">—</div><div class="kpi-delta neutral" id="kpi-phone-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Unique Leads</div><div class="kpi-value" id="kpi-quotes">—</div><div class="kpi-delta neutral" id="kpi-quotes-d"></div></div>
-      <div class="kpi-card"><div class="kpi-label">&rarr; Main Site</div><div class="kpi-value" id="kpi-outbound">&mdash;</div><div class="kpi-delta neutral" id="kpi-outbound-d"></div></div>
       <div class="kpi-card"><div class="kpi-label">Conversion Rate</div><div class="kpi-value" id="kpi-cvr">—</div><div class="kpi-delta neutral" id="kpi-cvr-d"></div></div>
     </div>
 
@@ -390,9 +388,9 @@ select.page-filter {
         </div>
         <table class="funnel-table" id="funnel-table">
           <thead><tr>
-            <th>Site</th><th>Visitors</th><th>→ Main</th><th>Quotes</th><th>CVR</th><th>Rate</th>
+            <th>Site</th><th>Visitors</th><th>Quotes</th><th>CVR</th><th>Rate</th>
           </tr></thead>
-          <tbody id="funnel-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+          <tbody id="funnel-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -765,7 +763,6 @@ async function generateReportPdf() {
   const pageviews = rows.filter(r => r.event_type === 'page_view').length;
   const phone = rows.filter(r => r.event_type === 'phone_click').length;
   const quotes = rows.filter(r => r.event_type === 'quote_confirmed' || r.event_type === 'form_submit' || r.event_type === 'chat_lead').length;
-  const outbound = rows.filter(r => r.event_type === 'outbound_to_main').length;
   const cvr = visitors > 0 ? ((quotes / visitors) * 100).toFixed(1) : '0.0';
 
   const startDate = new Date(since).toLocaleDateString();
@@ -773,7 +770,7 @@ async function generateReportPdf() {
   const siteLabel = selectedSiteLabel();
   const rangeLabel = `Last ${activeDays} days (${startDate} - ${endDate})`;
 
-  const paragraph = `For ${rangeLabel}, ${siteLabel} recorded ${visitors.toLocaleString()} unique visitors and ${pageviews.toLocaleString()} page views. We saw ${phone.toLocaleString()} phone clicks and ${quotes.toLocaleString()} quote actions, resulting in a conversion rate of ${cvr}%. There were ${outbound.toLocaleString()} clicks back to the main site.`;
+  const paragraph = `For ${rangeLabel}, ${siteLabel} recorded ${visitors.toLocaleString()} unique visitors and ${pageviews.toLocaleString()} page views. We saw ${phone.toLocaleString()} phone clicks and ${quotes.toLocaleString()} quote actions, resulting in a conversion rate of ${cvr}%.`;
 
   const bySite = {};
   rows.forEach(r => {
@@ -1529,7 +1526,7 @@ async function loadKPIs() {
   const sf = siteFilter();
 
   // Pull from the daily summary view to avoid row-limit issues with raw events
-  const rows = await query('v_daily_summary', `day=gte.${prevDay}${sf}&select=day,unique_visitors,page_views,phone_clicks,leads,lead_events,outbound_to_main`);
+  const rows = await query('v_daily_summary', `day=gte.${prevDay}${sf}&select=day,unique_visitors,page_views,phone_clicks,leads,lead_events`);
 
   const current  = rows.filter(r => r.day >= sinceDay);
   const previous = rows.filter(r => r.day < sinceDay && r.day >= prevDay);
@@ -1542,7 +1539,6 @@ async function loadKPIs() {
     phone:    sum(current, 'phone_clicks'),
     quotes:   sum(current, 'leads'),
     leadEvents: sum(current, 'lead_events'),
-    outbound: sum(current, 'outbound_to_main'),
   };
   const prev_stats = {
     visitors: sum(previous, 'unique_visitors'),
@@ -1550,7 +1546,6 @@ async function loadKPIs() {
     phone:    sum(previous, 'phone_clicks'),
     quotes:   sum(previous, 'leads'),
     leadEvents: sum(previous, 'lead_events'),
-    outbound: sum(previous, 'outbound_to_main'),
   };
 
   const cvr = stats.visitors > 0 ? ((stats.quotes / stats.visitors) * 100).toFixed(1) : '0.0';
@@ -1568,7 +1563,6 @@ async function loadKPIs() {
   setKpi('pageviews', stats.pageviews, prev_stats.pageviews);
   setKpi('phone', stats.phone, prev_stats.phone);
   setKpi('quotes', stats.quotes, prev_stats.quotes);
-  setKpi('outbound', stats.outbound, prev_stats.outbound);
   document.getElementById('kpi-cvr').textContent = cvr + '%';
   const leadDeltaEl = document.getElementById('kpi-quotes-d');
   if (leadDeltaEl) {
@@ -1636,19 +1630,18 @@ async function loadFunnel() {
   const sinceDay = since.split('T')[0];
   
   // Pull from the daily summary view to avoid row-limit issues
-  const rows = await query('v_daily_summary', `day=gte.${sinceDay}&select=site_id,unique_visitors,outbound_to_main,leads`);
+  const rows = await query('v_daily_summary', `day=gte.${sinceDay}&select=site_id,unique_visitors,leads`);
 
   const sites = [...new Set(rows.map(r => r.site_id))].sort();
   const tbody = document.getElementById('funnel-body');
 
-  if (!sites.length) { tbody.innerHTML = '<tr><td colspan="6" class="loading">No data yet</td></tr>'; return; }
+  if (!sites.length) { tbody.innerHTML = '<tr><td colspan="5" class="loading">No data yet</td></tr>'; return; }
 
   // Aggregate by site
   const siteStats = {};
   rows.forEach(r => {
-    if (!siteStats[r.site_id]) siteStats[r.site_id] = { visitors: 0, outbound: 0, quotes: 0 };
+    if (!siteStats[r.site_id]) siteStats[r.site_id] = { visitors: 0, quotes: 0 };
     siteStats[r.site_id].visitors += Number(r.unique_visitors) || 0;
-    siteStats[r.site_id].outbound += Number(r.outbound_to_main) || 0;
     siteStats[r.site_id].quotes += Number(r.leads) || 0;
   });
 
@@ -1662,7 +1655,6 @@ async function loadFunnel() {
     return `<tr>
       <td><span class="site-tag">${shortSite}</span></td>
       <td>${item.visitors.toLocaleString()}</td>
-      <td>${item.outbound.toLocaleString()}</td>
       <td>${item.quotes.toLocaleString()}</td>
       <td class="conv-pct">${cvr}%</td>
       <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill" style="width:${barW}%"></div></div></td>

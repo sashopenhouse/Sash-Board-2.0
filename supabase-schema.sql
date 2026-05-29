@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS events (
   ts            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   -- Identity
-  event_type    TEXT NOT NULL,           -- page_view | phone_click | form_submit | quote_confirmed | chat_lead | bath_quiz_lead | outbound_to_main | prize_wheel_spin | prize_wheel_claim | chat_click
+  event_type    TEXT NOT NULL,           -- page_view | phone_click | form_submit | quote_confirmed | chat_lead | bath_quiz_lead | prize_wheel_spin | prize_wheel_claim | chat_click
   site_id       TEXT NOT NULL,           -- newyorksash-main | newyorksashoffers | upstatetoughny | etc.
   visitor_id    TEXT,                    -- persistent per browser
   session_id    TEXT,                    -- resets after 30min inactivity
@@ -73,7 +73,6 @@ SELECT
   COUNT(*) FILTER (WHERE event_type = 'page_view')           AS page_views,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'page_view') AS unique_visitors,
   COUNT(*) FILTER (WHERE event_type = 'phone_click')         AS phone_clicks,
-  COUNT(*) FILTER (WHERE event_type = 'outbound_to_main')    AS outbound_to_main,
   -- Raw lead events (Quotes + Forms + Chat + Bath Quiz Leads)
   COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead', 'bath_quiz_lead')) AS lead_events,
   -- Unique leads deduped by session, then visitor fallback (includes chat/bath quiz)
@@ -98,7 +97,6 @@ CREATE OR REPLACE VIEW v_campaign_funnel AS
 SELECT
   site_id,
   COUNT(DISTINCT visitor_id)                                         AS total_visitors,
-  COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'outbound_to_main') AS clicked_to_main,
   COUNT(DISTINCT visitor_id) FILTER (WHERE event_type = 'phone_click')      AS phone_contacts,
   COUNT(*) FILTER (WHERE event_type IN ('quote_confirmed', 'form_submit', 'chat_lead', 'bath_quiz_lead'))  AS quote_conversion_events,
   COUNT(DISTINCT CASE
