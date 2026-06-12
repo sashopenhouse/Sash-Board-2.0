@@ -63,7 +63,7 @@ The snippet watches for `form submit` events. If your quote form is an embedded 
 ```
 The snippet checks for this on page load automatically.
 
-### Prize wheel (newyorksashoffers.com)
+### Prize wheel
 Add `data-nys-action="spin"` and `data-nys-action="claim"` to your spin and claim buttons:
 ```html
 <button id="spinBtn" data-nys-action="spin" data-nys-prize="10% Off">Spin</button>
@@ -185,6 +185,37 @@ Run Meta importer:
 ```bash
 node scripts/import-meta-ads.js --days 7
 ```
+
+### Meta CAPI relay setup (server-side)
+
+This project now supports forwarding tracked website events to Meta Conversions API (CAPI)
+through a backend relay endpoint at `/api/capi`.
+
+Why relay: your Meta access token stays server-side and is never exposed in browser code.
+
+Set these environment variables in your deployment (and local `.env.local` when testing):
+
+- `META_PIXEL_ID`
+- `META_CAPI_ACCESS_TOKEN`
+- Optional: `META_CAPI_TEST_EVENT_CODE` (recommended while validating in Events Manager)
+
+Tracker config:
+
+- `nys-track.js` includes `NYS_CAPI_ENDPOINT`.
+- Point it to your deployed relay URL (default is `https://sash-board-2-0.vercel.app/api/capi`).
+
+Events forwarded to CAPI:
+
+- `page_view` -> `PageView`
+- `form_submit`, `quote_confirmed`, `bath_quiz_lead` -> `Lead`
+- `phone_click`, `chat_click` -> `Contact`
+- `prize_wheel_claim` -> `CompleteRegistration`
+
+Quick validation:
+
+1. Enable `META_CAPI_TEST_EVENT_CODE`.
+2. Visit a tracked page and trigger a lead event.
+3. Check Meta Events Manager Test Events for incoming CAPI events.
 
 Run TikTok importer:
 

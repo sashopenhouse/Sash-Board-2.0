@@ -12,8 +12,9 @@
   // ─── CONFIG ────────────────────────────────────────────────────────────────
   const NYS_ENDPOINT = 'https://iyywdyrspsiqhdnxsbzc.supabase.co/rest/v1/events'; // TODO: replace
   const NYS_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eXdkeXJzcHNpcWhkbnhzYnpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MjQ2ODUsImV4cCI6MjA5MTQwMDY4NX0.muOn2hQfAbIPDz5jWySWNJtiMUroBkT-M0vwZNQXlgo';                   // TODO: replace
+  const NYS_CAPI_ENDPOINT = 'https://sash-board-2-0.vercel.app/api/capi'; // Optional Meta CAPI relay endpoint
   const NYS_SITE_ID  = 'AUTO'; // 'AUTO' = detect from hostname, or set manually
-                                // e.g. 'newyorksash-main' | 'newyorksashoffers'
+                                // e.g. 'newyorksash-main'
                                 // | 'upstatetoughny' | 'newyorksash-adirondacks'
                                 // | 'newyorksash-cooperstown' | 'energy-efficient-cny'
   // ───────────────────────────────────────────────────────────────────────────
@@ -52,7 +53,6 @@
 
     const map = {
       'newyorksash.com':              'newyorksash-main',
-      'newyorksashoffers.com':        'newyorksashoffers',
       'upstatetoughny.com':           'upstatetoughny',
       'newyorksash-adirondacks.com':  'newyorksash-adirondacks',
       'newyorksash-cooperstown.com':  'newyorksash-cooperstown',
@@ -135,6 +135,72 @@
     try { return JSON.parse(sessionStorage.getItem('nys_journey') || '[]'); } catch { return []; }
   }
 
+  function shouldForwardToCapi(eventType) {
+    return [
+      'page_view',
+      'form_submit',
+      'quote_confirmed',
+      'bath_quiz_lead',
+      'chat_click',
+      'phone_click',
+      'prize_wheel_claim'
+    ].includes(eventType);
+  }
+
+  function getCookie(name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function buildEventId(eventType, sessionId) {
+    const rand = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+    return `${eventType}:${sessionId}:${Date.now()}:${rand}`;
+  }
+
+  function forwardToCapi(eventType, payload) {
+    if (!NYS_CAPI_ENDPOINT || !shouldForwardToCapi(eventType)) return;
+
+    const capiPayload = {
+      event_type: eventType,
+      event_id: buildEventId(eventType, payload.session_id || 'nosession'),
+      event_time: payload.ts,
+      page_url: payload.page_url,
+      page_path: payload.page_path,
+      site_id: payload.site_id,
+      visitor_id: payload.visitor_id,
+      session_id: payload.session_id,
+      fbp: getCookie('_fbp'),
+      fbc: getCookie('_fbc'),
+      user_agent: payload.user_agent,
+      city: payload.city,
+      region: payload.region,
+      country: payload.country,
+      utm_source: payload.utm_source,
+      utm_medium: payload.utm_medium,
+      utm_campaign: payload.utm_campaign,
+      meta: payload
+    };
+
+    fetch(NYS_CAPI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(capiPayload),
+      keepalive: true,
+      mode: 'cors'
+    })
+      .then((response) => {
+        if (!response.ok && isDebugEnabled()) {
+          console.warn('[nys-track] CAPI relay rejected', response.status, eventType);
+        }
+      })
+      .catch((error) => {
+        if (isDebugEnabled()) {
+          console.warn('[nys-track] CAPI relay failed', eventType, error);
+        }
+      });
+  }
+
   // ── Core fire function ──────────────────────────────────────────────────────
   async function fire(eventType, meta = {}) {
     const utm  = getOrStoreUTM();
@@ -178,6 +244,9 @@
           console.warn('[nys-track] Event failed', eventType, error);
         }
       });
+
+    // Best-effort Meta CAPI relay using a backend tokenized endpoint.
+    forwardToCapi(eventType, payload);
   }
 
   // ── 1. Page view ────────────────────────────────────────────────────────────

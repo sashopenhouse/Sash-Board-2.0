@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS events (
 
   -- Identity
   event_type    TEXT NOT NULL,           -- page_view | phone_click | form_submit | quote_confirmed | chat_lead | bath_quiz_lead | prize_wheel_spin | prize_wheel_claim | chat_click
-  site_id       TEXT NOT NULL,           -- newyorksash-main | newyorksashoffers | upstatetoughny | etc.
+  site_id       TEXT NOT NULL,           -- newyorksash-main | upstatetoughny | etc.
   visitor_id    TEXT,                    -- persistent per browser
   session_id    TEXT,                    -- resets after 30min inactivity
 
